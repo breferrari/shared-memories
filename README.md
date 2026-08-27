@@ -63,7 +63,7 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 
 ## How It Works
 
-### The Five Pieces
+### The Pieces
 
 | Piece | What | How |
 |-------|------|-----|
@@ -72,6 +72,7 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 | **PostToolUse Hook** | Tells Claude in-conversation that a memory was saved in `review` mode, so it can mention pending review and invoke `/approve-memories` when the user confirms | Fires sync after `Write` / `Edit` / `MultiEdit` to `.claude/memories/`; injects `additionalContext` into Claude's next decision step. Silent in `auto` and `full` |
 | **/approve-memories Slash Command** | One shared approval surface both the user and Claude invoke identically — stages, commits, pulls `--rebase`, pushes everything pending under `memories/` | Re-runs the Stop-hook filename guardrail; takes an optional commit-message reason; works in every mode (primary use is `review`; also unblocks state stuck after a push failure in `auto` / `full`) |
 | **Sparse Checkout + Symlink** | Keeps the shared repo invisible on disk | `.claude/.memories-repo/` is a blobless single-branch sparse clone; `.claude/memories` is a symlink Claude Code reads from |
+| **CLAUDE.local.md Section** | Tells Claude the memories folder is a shared checkout rather than local scratch, so it doesn't stage memories in the wrong repo, misread an empty `git log` as "no history", or tidy away a teammate's file | An mcs template section (`shared-memories.instructions`) composed into `CLAUDE.local.md` on every `mcs sync`, between `<!-- mcs:begin -->` markers; your own content outside the markers is preserved |
 
 ### The Feedback Loop
 
@@ -112,6 +113,12 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 | Script | When | What It Does |
 |--------|------|-------------|
 | **configure-memories.sh** | `mcs sync` | Sparse-clones the shared repo, sets up the symlink, migrates any pre-existing `.claude/memories/` into the shared folder |
+
+### CLAUDE.local.md Section
+
+| Section | What It Does |
+|---------|-------------|
+| **shared-memories.instructions** | Four facts Claude cannot infer from the filesystem: writes and deletions are proposals to the team's repo; the memory set changes between sessions; the parent project's git doesn't track memories (so `git add` there is a silent no-op); and memory files must be addressed as `git -C .claude/.memories-repo -- memories/<file>` |
 
 ### Doctor Checks
 
@@ -188,10 +195,12 @@ shared-memories/
 │   ├── memories_pull.sh             # SessionStart: pull + stuck-state warning
 │   ├── memories_autopush.sh         # Stop: auto-commit + push (async)
 │   └── memories_announce.sh         # PostToolUse: review-mode nudge to Claude (sync)
-└── scripts/
-    ├── configure-memories.sh        # Sparse clone + symlink + migration
-    ├── doctor-memories.sh           # Setup health check
-    └── doctor-memories-remote.sh    # Remote-access health check
+├── scripts/
+│   ├── configure-memories.sh        # Sparse clone + symlink + migration
+│   ├── doctor-memories.sh           # Setup health check
+│   └── doctor-memories-remote.sh    # Remote-access health check
+└── templates/
+    └── instructions.md              # CLAUDE.local.md section — what this dir is
 ```
 
 On engineer disks, the pack materializes as:
@@ -217,10 +226,38 @@ Engineers who already have `.claude/memories/` populated (from `mcs-cli/memory`,
 1. The existing directory is moved aside to `.claude/.memories-migration-<timestamp>/`
 2. The sparse clone + symlink are set up as normal
 3. Files from the backup are imported into the new shared folder, **with the shared version winning on any filename conflict** (your local copy stays in the backup dir for manual review)
-4. Well-named migrated files are auto-committed and pushed so they immediately become team knowledge
-5. If no conflicts remain, the backup dir is cleaned up automatically
+4. **Files the shared repo previously deleted are held back** rather than re-imported (see below)
+5. Well-named migrated files are auto-committed and pushed so they immediately become team knowledge
+6. If nothing is left in the backup dir, it's cleaned up automatically
 
 If any step fails partway, an `ERR` trap restores the original folder from the backup — you're never left with a broken setup and no memories.
+
+### Why previously-deleted files are held back
+
+Matching on "does this filename exist right now" isn't enough. Anything a past `memory-audit` removed is absent from the working tree, so a stale local copy looks brand new — it gets re-imported and, because well-named migrated files are auto-pushed, silently restored for the whole team. That reverses a curation decision someone made deliberately.
+
+So the importer also scans the branch's history for deletions and holds those files back, naming the commit that removed each one:
+
+```
+Held back 1 file(s) previously deleted from the shared repo:
+  - learning_x_y.md
+      deleted by 6367a99 audit: remove stale memories
+```
+
+They stay in the backup dir; copy one across yourself to re-add it deliberately. Any historical deletion counts, not just commits labelled `audit:` — most curation happens in ordinary auto-push commits, so matching on the subject line would miss the majority of it.
+
+To audit an import after the fact:
+
+```bash
+# what did this import add?
+git -C .claude/.memories-repo show --name-only --format="" <commit>
+
+# which paths were deleted before, and why? (the subject carries the intent)
+git -C .claude/.memories-repo log --all --diff-filter=D --name-only \
+  --format='%h|%ad|%s' --date=short -- memories/
+```
+
+A separate gap worth knowing about when you audit: filenames alone under-count duplicates, because memories consolidated during an earlier merge were **renamed**, so a re-added fragment never collides with its surviving twin. Compare normalized names (strip `_`/`-`/case), titles, and content — not just filenames.
 
 ---
 
@@ -301,14 +338,14 @@ If your workflow makes the friction unnecessary, set `MEMORIES_AUTOPUSH_MODE=ful
 ```bash
 mcs pack validate .                                  # verify techpack.yaml + file refs
 mcs doctor                                           # after sync: verify setup + remote access
-git -C .claude/.memories-repo/memories log -1        # confirm auto-push landed
+git -C .claude/.memories-repo log -1 -- memories/    # confirm auto-push landed
 ```
 
 **If the Stop hook silently refuses to push**, the naming guardrail is likely rejecting a file. Run:
 
 ```bash
-git -C .claude/.memories-repo/memories status              # dirty files
-git -C .claude/.memories-repo/memories ls-files --others   # untracked files
+git -C .claude/.memories-repo status -- memories/              # dirty files
+git -C .claude/.memories-repo ls-files --others --exclude-standard -- memories/   # untracked
 ```
 
 Anything not matching `memories/(learning|decision)_*.md` needs renaming.

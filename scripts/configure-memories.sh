@@ -16,6 +16,10 @@ set -euo pipefail
 # The checkout uses single-branch partial-blobless sparse-checkout so only the
 # memory markdowns materialize on disk — pack plumbing stays in git history but
 # never hits the working tree.
+#
+# Migrated files are checked against the branch's deletion history: anything a
+# past memory-audit removed is held back rather than re-imported, so a stale
+# local KB can't silently republish memories the team already curated away.
 
 memories_link="$MCS_PROJECT_PATH/.claude/memories"
 repo_dir="$MCS_PROJECT_PATH/.claude/.memories-repo"
@@ -167,6 +171,24 @@ fi
 if [ -n "$migration_backup" ] && [ -d "$migration_backup" ]; then
   imported=0
   skipped=0
+  resurrected=0
+  resurrected_files=""
+
+  # Paths this branch's history records as deleted (the header note explains why
+  # we care). Blobless clones keep every commit and tree, so this is offline and
+  # fast — ~0.1s over 600 commits. Deliberately un-piped: under `set -o pipefail`
+  # the ERR trap is inherited into command substitutions, and this block still
+  # runs with restore_backup_on_error armed. Duplicates are harmless for the
+  # membership test below, so `sort -u` buys nothing worth that risk, and
+  # `|| true` covers a bootstrap branch with no commits yet.
+  deleted_history=$(git -C "$repo_dir" log --all --diff-filter=D --name-only \
+    --format='' -- memories/ 2>/dev/null || true)
+  # Wrapping in newline sentinels turns the per-file lookup below into a pure
+  # builtin glob match: no `grep` fork per migrating file (a 133-file migration
+  # would otherwise spawn one each), and no second pipeline in this block.
+  nl=$'\n'
+  deleted_history_padded="$nl$deleted_history$nl"
+
   shopt -s nullglob dotglob
   for f in "$migration_backup"/*; do
     [ -f "$f" ] || continue
@@ -174,6 +196,10 @@ if [ -n "$migration_backup" ] && [ -d "$migration_backup" ]; then
     target="$memories_link/$name"
     if [ -e "$target" ]; then
       skipped=$((skipped + 1))
+    elif [[ "$deleted_history_padded" == *"$nl""memories/$name""$nl"* ]]; then
+      # Sentinels make this a whole-line match, equivalent to `grep -qxF`.
+      resurrected=$((resurrected + 1))
+      resurrected_files+="$name"$'\n'
     else
       mv "$f" "$target"
       imported=$((imported + 1))
@@ -181,19 +207,47 @@ if [ -n "$migration_backup" ] && [ -d "$migration_backup" ]; then
   done
   shopt -u nullglob dotglob
 
-  # If nothing left in backup (no conflicts, no subdirs), clean it up.
+  # If nothing left in backup (no conflicts, no held-back files, no subdirs),
+  # clean it up.
   if [ -z "$(ls -A "$migration_backup" 2>/dev/null)" ]; then
     rmdir "$migration_backup"
     echo "Migration: imported $imported local memory file(s); $skipped conflict(s) (shared version kept)."
   else
-    echo "Migration: imported $imported local memory file(s); $skipped conflict(s) preserved at"
-    echo "  $migration_backup"
-    echo "  (the shared repo had files with the same names; review and delete when ready)."
+    echo "Migration: imported $imported local memory file(s); $skipped conflict(s) (shared version kept); $resurrected previously-deleted file(s) held back."
+    echo "  Kept at $migration_backup for review."
   fi
 fi
 
 # Clear the ERR trap now that we're past the risky section.
 trap - ERR
+
+# ─── Report files held back as previously-deleted. ─────────────────────────
+# Deliberately placed after `trap - ERR`: the per-file `git log` lookups below
+# would otherwise risk firing restore_backup_on_error mid-report.
+if [ "${resurrected:-0}" -gt 0 ]; then
+  echo ""
+  echo "Held back $resurrected file(s) previously deleted from the shared repo:"
+  res_idx=0
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    res_idx=$((res_idx + 1))
+    echo "  - $name"
+    # Cap the per-file lookups so a large migration stays fast.
+    # keep in sync with hooks/memories_autopush.sh deletion-report cap
+    if [ "$res_idx" -le 20 ]; then
+      why=$(git -C "$repo_dir" log -1 --format='%h %s' --diff-filter=D \
+        -- "memories/$name" 2>/dev/null || true)
+      # A plain `if`, not `[ -n … ] && echo` — the latter returns 1 when $why is
+      # empty and, as the last command in this block, would trip `set -e`.
+      if [ -n "$why" ]; then
+        echo "      deleted by $why"
+      fi
+    fi
+  done <<< "$resurrected_files"
+  echo ""
+  echo "Someone removed these deliberately, so they were not re-imported or pushed."
+  echo "To re-add one anyway: cp '$migration_backup/<file>' '$memories_link/<file>'"
+fi
 
 # ─── Auto-commit migrated memories if any well-named ones landed. ──────────
 # Without this step the migrated files are untracked in the sparse checkout,

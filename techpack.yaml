@@ -94,6 +94,13 @@ components:
       - .claude/.memories-repo
       - .claude/.memories-migration-*
 
+# ── CLAUDE.local.md section ───────────────────────────────
+# Tells Claude the memories directory is a shared sparse checkout, not local
+# scratch. Renders as `shared-memories.instructions` (mcs prefixes the pack id).
+templates:
+  - sectionIdentifier: instructions
+    contentFile: templates/instructions.md
+
 configureProject:
   script: scripts/configure-memories.sh
 

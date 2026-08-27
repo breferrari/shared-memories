@@ -17,9 +17,9 @@ trap 'rc=$?; echo "memories_autopush: aborted (rc=$rc) at line $LINENO: $BASH_CO
 # halt everything until renamed — naming policy is orthogonal to push policy.
 # Unset, empty, or unknown values fall through to `auto`.
 #
-# After memory-audit (auto mode only) intentionally removes stale files:
-#   git -C .claude/.memories-repo/memories commit -am "audit: remove stale memories" && \
-#     git -C .claude/.memories-repo/memories push
+# After memory-audit (auto mode only) intentionally removes stale files, the
+# user approves the deletions with the pack's slash command:
+#   /approve-memories audit cleanup
 
 command -v git >/dev/null 2>&1 || { echo "memories_autopush: git not found; skipping" >&2; exit 0; }
 command -v jq  >/dev/null 2>&1 || { echo "memories_autopush: jq not found; skipping" >&2; exit 0; }
@@ -281,8 +281,8 @@ if [ "$uncommitted" -gt 0 ]; then
       del_count=$(echo "$deleted_files" | wc -l | tr -d ' ')
       echo "Shared memories: $del_count deleted memory file(s) left for manual review (not auto-pushed):"
       echo "$deleted_files" | sed 's/^/  - /'
-      echo "If intentional (e.g. after memory-audit), push manually:"
-      echo "  git -C .claude/.memories-repo/memories commit -am 'audit: remove stale memories' && git -C .claude/.memories-repo/memories push"
+      echo "If intentional (e.g. after memory-audit), approve them:"
+      echo "  /approve-memories audit cleanup"
     fi
 
     # Stage adds/mods only — deletions stay in the working tree.

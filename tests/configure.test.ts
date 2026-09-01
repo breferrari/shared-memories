@@ -252,6 +252,16 @@ describe("audited configure edges — bash and TypeScript agree", () => {
 });
 
 describe("configure-memories — deliberate fixes to defects in the bash", () => {
+	test("an unset MCS_PROJECT_PATH is refused rather than resolved against the filesystem root", () => {
+		// The bash built "$MCS_PROJECT_PATH/.claude/..." by concatenation, so an empty
+		// value produced "/.claude/..." and failed deep inside git clone. Falling back
+		// to cwd would be worse: configure would set up whatever directory you stood in.
+		const r = runConfigure({ name: "unset project path", env: { MCS_PROJECT_PATH: "" } });
+		assert.equal(r.code, 1, "an unusable project path must fail fast");
+		assert.match(r.stderr, /MCS_PROJECT_PATH is not set/);
+		assert.equal(r.stdout, "", "nothing is reported as done");
+	});
+
 	test("a bootstrap install against a branch with no memories reports success", () => {
 		const r = runConfigure({ name: "bootstrap", emptyRemote: true });
 		assert.equal(r.code, 0, "a first install is not a failure");

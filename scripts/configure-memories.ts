@@ -88,6 +88,10 @@ function main(): void {
 		err("MEMORIES_REPO_URL not resolved; skipping memories clone.");
 		process.exit(0);
 	}
+	if (project === "") {
+		err("MCS_PROJECT_PATH is not set; cannot locate the project's .claude directory.");
+		process.exit(1);
+	}
 	if (!gitPresent()) {
 		err("git is required for mcs-shared-memories setup but was not found on PATH.");
 		process.exit(1);

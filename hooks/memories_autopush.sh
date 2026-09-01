@@ -330,6 +330,16 @@ if [ "$committed" -eq 1 ]; then
 fi
 [ "$unpushed" -eq 0 ] && exit 0
 
+# Stop hooks fire at turn boundaries, so a team pushes to one branch at the same
+# instant and a single attempt lands exactly one writer.
+push_attempts=${MEMORIES_PUSH_ATTEMPTS:-12}
+# A non-integer would error in the numeric test below and hit the ERR trap.
+case "$push_attempts" in
+  ''|*[!0-9]*) push_attempts=12 ;;
+  0)           push_attempts=1  ;;
+esac
+attempt=1
+while :; do
 if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quiet 2>&1); then
   # Distinguish actual rebase conflicts from network/auth/etc. so the message
   # matches reality. LC_ALL=C above forces English git output so the CONFLICT
@@ -349,7 +359,27 @@ if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quie
   exit 0
 fi
 
-if ! push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
-  echo "Shared memories: auto-push failed. Will retry on next Stop."
-  [ -n "$push_err" ] && printf '  %s\n' "$push_err"
+if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
+  break
 fi
+
+# Auth failures fail identically every attempt; only contention is worth retrying.
+if printf '%s' "$push_err" | grep -qiE 'authentication failed|permission denied|access denied|could not read (username|password)|repository not found'; then
+  echo "Shared memories: auto-push failed (authentication or permissions). Will retry on next Stop."
+  [ -n "$push_err" ] && printf '  %s\n' "$push_err"
+  break
+fi
+
+if [ "$attempt" -ge "$push_attempts" ]; then
+  echo "Shared memories: auto-push failed after $attempt attempt(s). Will retry on next Stop."
+  [ -n "$push_err" ] && printf '  %s\n' "$push_err"
+  break
+fi
+
+# Full jitter, capped at 1.5s. Seeded explicitly because awk's srand() reads the
+# clock at one-second resolution — writers colliding in the same second would
+# otherwise draw identical delays and wake together.
+jitter_seed=$(( ${RANDOM:-0} ^ $$ ^ attempt ))
+sleep "$(awk -v a="$attempt" -v seed="$jitter_seed" 'BEGIN{srand(seed);d=0.05*(2^a);if(d>1.5)d=1.5;printf "%.3f", rand()*d}')"
+attempt=$((attempt+1))
+done

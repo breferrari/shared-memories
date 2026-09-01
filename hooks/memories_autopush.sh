@@ -364,10 +364,7 @@ if [ "$push_rc" -eq 0 ]; then
   break
 fi
 
-# git exits 1 when the remote rejects an update — the contention this loop is
-# for — and 128 on fatal errors: auth, network, missing repository. Matching
-# message text instead would break under any non-English locale, which is what
-# the LC_ALL=C above the pull exists to prevent.
+# 1 = rejected update (contention, worth retrying). Anything else is fatal.
 if [ "$push_rc" -ne 1 ]; then
   echo "Shared memories: auto-push failed (not a rejected update — auth, network or repository). Will retry on next Stop."
   [ -n "$push_err" ] && printf '  %s\n' "$push_err"

@@ -98,9 +98,11 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 
 | Hook | Event | What It Does |
 |------|-------|-------------|
-| **memories_pull.sh** | `SessionStart` | Fast-forwards the shared memories checkout; emits a mode-aware warning if previous state is stuck (or, in `review` mode, summarises pending review) |
-| **memories_autopush.sh** | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
-| **memories_announce.sh** | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
+| **memories_pull.sh** → `pull.ts` | `SessionStart` | Fast-forwards the shared memories checkout; emits a mode-aware warning if previous state is stuck (or, in `review` mode, summarises pending review) |
+| **memories_autopush.sh** → `autopush.ts` | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
+| **memories_announce.sh** → `announce.ts` | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
+
+Each `.sh` is a four-line shim. mcs registers hooks as `bash .claude/hooks/<pack-id>/<file>`, so a hook file has to be bash whatever its shebang says; the shim's only job is to `exec` the TypeScript beside it. All logic lives in `runtime/`.
 
 ### Slash Commands
 
@@ -112,7 +114,7 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 
 | Script | When | What It Does |
 |--------|------|-------------|
-| **configure-memories.sh** | `mcs sync` | Sparse-clones the shared repo, sets up the symlink, migrates any pre-existing `.claude/memories/` into the shared folder |
+| **configure-memories.ts** | `mcs sync` | Sparse-clones the shared repo, sets up the symlink, migrates any pre-existing `.claude/memories/` into the shared folder |
 
 ### CLAUDE.local.md Section
 
@@ -131,7 +133,9 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 
 | Dep | Via |
 |-----|-----|
-| **jq** | brew |
+| **Node.js 22+** | brew |
+
+Node runs the TypeScript directly — there is no build step, no `node_modules`, and no runtime dependencies.
 
 ---
 
@@ -140,6 +144,7 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
 ### Prerequisites
 
 - macOS
+- Node.js 22 or newer
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 - [mcs](https://github.com/mcs-cli/mcs) CLI
 - [`mcs-cli/memory`](https://github.com/mcs-cli/memory) (companion capture pack — produces the `learning_*.md` / `decision_*.md` files this pack shares)
@@ -191,14 +196,22 @@ shared-memories/
 │   └── approve-memories.md          # Slash command for review-mode approval
 ├── config/
 │   └── settings.json                # Templated env block — ships MEMORIES_AUTOPUSH_MODE
-├── hooks/
-│   ├── memories_pull.sh             # SessionStart: pull + stuck-state warning
-│   ├── memories_autopush.sh         # Stop: auto-commit + push (async)
-│   └── memories_announce.sh         # PostToolUse: review-mode nudge to Claude (sync)
-├── scripts/
-│   ├── configure-memories.sh        # Sparse clone + symlink + migration
-│   ├── doctor-memories.sh           # Setup health check
-│   └── doctor-memories-remote.sh    # Remote-access health check
+├── hooks/                           # Four-line bash shims; mcs runs hooks via `bash`
+│   ├── memories_pull.sh
+│   ├── memories_autopush.sh
+│   └── memories_announce.sh
+├── runtime/                         # Installed to .claude/shared-memories/
+│   ├── hooks/
+│   │   ├── pull.ts                  # SessionStart: pull + stuck-state warning
+│   │   ├── autopush.ts              # Stop: auto-commit + push (async)
+│   │   └── announce.ts              # PostToolUse: review-mode nudge to Claude (sync)
+│   └── lib/                         # git, paths, naming, mode, pending, report, push
+├── scripts/                         # Run in place from the pack checkout
+│   ├── configure-memories.ts        # Sparse clone + symlink + migration
+│   ├── doctor-memories.ts           # Setup health check
+│   └── doctor-memories-remote.ts    # Remote-access health check
+├── tests/                           # node:test — unit, contract and behaviour
+│   └── golden/                      # Recorded behaviour of the bash this replaced
 └── templates/
     └── instructions.md              # CLAUDE.local.md section — what this dir is
 ```
@@ -353,6 +366,23 @@ Anything not matching `memories/(learning|decision)_*.md` needs renaming.
 **If SessionStart warns about lingering state**:
 - In `auto` / `full` mode the previous push hit an auth/network issue (fix and wait for the next Stop, or run `/approve-memories` to retry immediately), or guardrail-rejected files are sitting dirty (rename them). `mcs doctor` will tell you which.
 - In `review` mode the warning is expected — it lists pending changes awaiting your decision. End a turn to see the per-file report, then `/approve-memories` to push.
+
+---
+
+## Development
+
+```bash
+npm test                                             # unit, contract and differential suites
+npm run typecheck                                    # tsc --noEmit (deps install ad hoc in CI)
+```
+
+The pack is TypeScript run directly by Node — no build step and no runtime dependencies. `tsconfig.json` sets `erasableSyntaxOnly`, so the syntax stays strippable: no `enum`, no `namespace`, no constructor parameter properties.
+
+**How the tests prove behavior is unchanged.** This pack was a bash implementation before it was TypeScript, and the port was required to match it exactly. During the port a differential harness ran both implementations against the same fixture — same directory, same git objects, restored in between — and diffed stdout byte for byte, exit code, and resulting git state. Once every fixture agreed, that verified bash output was frozen into `tests/golden/` and the bash was removed.
+
+The goldens are now the contract: `tests/` runs the TypeScript against them and compares stdout, stderr, exit code and the resulting repository state, so a drift is a change in what the pack does rather than a stale test. Fixtures carry an `expect` pattern asserted against the recorded output, so a fixture where nothing happens fails instead of passing vacuously. Machine- and day-dependent values (temp paths, hostname, dates, git's relative timestamps) are normalised; everything else is byte-exact.
+
+Two deviations from the original bash are sanctioned, both stderr-only: the missing-interpreter message names `node` rather than `jq`, and the abort diagnostic has no `$LINENO` equivalent.
 
 ---
 

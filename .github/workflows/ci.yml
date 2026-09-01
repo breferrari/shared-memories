@@ -1,0 +1,74 @@
+name: ci
+
+# macOS only, deliberately: mcs is a Swift/Homebrew tool that installs on macOS,
+# so it is the only platform that can actually install this pack. The suite runs
+# the hook shims exactly as mcs does, through bash.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: the tools the shims rely on are present
+        run: |
+          command -v git || { echo "::error::git is required"; exit 1; }
+          echo "bash ${BASH_VERSION}, node $(node --version)"
+
+      - name: install typecheck deps (CI-only, never shipped)
+        run: npm install --no-save --silent typescript@5.9.2 @types/node@22.9.0
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: unit, contract and behaviour tests
+        run: npm test
+
+      # The port's premise: os.hostname() short-form equals `hostname -s`, so the
+      # commit subjects the pack writes are unchanged.
+      - name: the hostname equivalence holds on this runner
+        run: |
+          from_shell=$(hostname -s)
+          from_node=$(node -e 'process.stdout.write(require("node:os").hostname().split(".")[0])')
+          echo "shell='$from_shell' node='$from_node'"
+          [ "$from_shell" = "$from_node" ] || { echo "::error::hostname -s and os.hostname() disagree"; exit 1; }
+
+      # Shell is permitted only in the three hook shims, because mcs invokes hooks
+      # as `bash <path>`. Everything else is TypeScript.
+      - name: no shell crept back in
+        run: |
+          stray=$(find runtime scripts tests -name '*.sh' 2>/dev/null || true)
+          if [ -n "$stray" ]; then
+            echo "::error::shell scripts are permitted only in hooks/, as shims"
+            echo "$stray"
+            exit 1
+          fi
+          count=$(ls hooks/*.sh | wc -l | tr -d ' ')
+          [ "$count" = "3" ] || { echo "::error::expected exactly 3 hook shims, found $count"; exit 1; }
+
+      # A test that writes outside its temp dir is a bug wherever it lands.
+      - name: the test run left the working tree clean
+        run: |
+          residue=$(git status --porcelain --untracked-files=all)
+          if [ -n "$residue" ]; then
+            echo "::error::the test run left files behind"
+            echo "$residue"
+            exit 1
+          fi

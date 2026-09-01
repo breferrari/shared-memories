@@ -39,13 +39,13 @@ The obvious fix is a shared git repo. Two friction points kill adoption:
 This pack implements a **closed-loop sharing system** that pulls the latest team memories at session start and pushes new ones when Claude finishes a turn.
 
 ```mermaid
-flowchart LR
+flowchart TD
     S([Session starts]) --> P["SessionStart hook<br/>git pull --ff-only"]
     P --> W["Work session<br/>continuous-learning writes<br/>learning_*.md · decision_*.md"]
     W --> T["Stop hook<br/>auto-push"]
     T -->|"filename guard<br/>+ configurable push policy"| R
-    R[("shared memories repo<br/>memories/<br/>learning_background_task_watchdog_timeout.md<br/>learning_orm_batch_insert_memory_spike.md<br/>decision_architecture_mvvm_coordinators.md<br/>…")]
-    R -->|"teammates fast-forward<br/>at their next session start"| P
+    R[("shared memories repo — memories/<br/><br/>learning_background_task_watchdog_timeout.md<br/>learning_orm_batch_insert_memory_spike.md<br/>decision_architecture_mvvm_coordinators.md<br/>…")]
+    R -->|"teammates fast-forward at<br/>their next session start"| P
 ```
 
 Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). This pack is the distribution layer that makes them team-shared.
@@ -220,7 +220,7 @@ shared-memories/
 │   ├── doctor-memories.ts           # Setup health check
 │   └── doctor-memories-remote.ts    # Remote-access health check
 ├── tests/                           # node:test — unit, contract and behaviour
-│   └── golden/                      # Recorded behaviour of the bash this replaced
+│   └── golden/                      # Behaviour recordings the suite checks against
 ├── templates/
 │   └── instructions.md              # CLAUDE.local.md section — what this dir is
 ├── .github/workflows/ci.yml         # macOS × Node 22/24
@@ -402,15 +402,13 @@ npm test                                             # unit, contract and behavi
 npm run typecheck                                    # tsc --noEmit (deps install ad hoc in CI)
 ```
 
-The pack is TypeScript run directly by Node — no build step and no runtime dependencies. `tsconfig.json` sets `erasableSyntaxOnly`, so the syntax stays strippable: no `enum`, no `namespace`, no constructor parameter properties.
+TypeScript run directly by Node: no build step, no runtime dependencies, no lockfile. `tsconfig.json` sets `erasableSyntaxOnly`, so the syntax stays strippable — no `enum`, no `namespace`, no constructor parameter properties.
 
-**How the tests prove behavior is unchanged.** This pack was a bash implementation before it was TypeScript, and the port was required to match it exactly. During the port a differential harness ran both implementations against the same fixture — same directory, same git objects, restored in between — and diffed stdout byte for byte, exit code, and resulting git state. Once every fixture agreed, that verified bash output was frozen into `tests/golden/` and the bash was removed.
+**`tests/golden/` is the behaviour contract.** Each file pins what the pack produces for one fixture: stdout, stderr, exit code, and the resulting repository state. The suite builds a throwaway project with a real git remote, invokes the hooks and scripts the way mcs does — `bash .claude/hooks/<pack-id>/<file>` with the working directory at the project root — and compares. A diff therefore means the pack's behaviour changed, not that a test went stale.
 
-The goldens are now the contract: `tests/` runs the TypeScript against them and compares stdout, stderr, exit code and the resulting repository state, so a drift is a change in what the pack does rather than a stale test. Fixtures carry an `expect` pattern asserted against the recorded output, so a fixture where nothing happens fails instead of passing vacuously. Machine- and day-dependent values (temp paths, hostname, dates, git's relative timestamps) are normalised; everything else is byte-exact.
+Fixtures carry an `expect` pattern asserted against the recording, so a fixture where nothing happens fails rather than passing vacuously. Machine- and day-dependent values — temp paths, hostname, dates, git's relative timestamps — are normalised; everything else is byte-exact.
 
-Two deviations from the original bash are incidental, both stderr-only: the missing-interpreter message names `node` rather than `jq`, and the abort diagnostic has no `$LINENO` equivalent.
-
-Two more are deliberate bug fixes, each marked as a `deviation` on its fixture so the golden still records what the bash did and the departure is visible rather than edited away. A first install against a branch with no `memories/` tree now reports `Done. 0 memory file(s)` and exits 0, where the bash exited 2 and printed nothing — its final `count=$(ls "$link"/*.md ...)` hit an unmatched glob, which under `set -e -o pipefail` killed the script. And an unset `MCS_PROJECT_PATH` is now refused with a clear message instead of resolving paths against the filesystem root.
+CI runs on macOS across Node 22 and 24. Besides the typecheck and the suite it guards three things: shell exists only as the three hook shims, `hostname -s` still matches `os.hostname().split(".")[0]` (the commit subjects depend on it), and the suite leaves the working tree clean.
 
 ---
 

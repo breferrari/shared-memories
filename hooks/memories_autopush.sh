@@ -359,13 +359,17 @@ if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quie
   exit 0
 fi
 
-if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
+push_err=$(git -C "$memories_dir" push --quiet 2>&1) && push_rc=0 || push_rc=$?
+if [ "$push_rc" -eq 0 ]; then
   break
 fi
 
-# Auth failures fail identically every attempt; only contention is worth retrying.
-if printf '%s' "$push_err" | grep -qiE 'authentication failed|permission denied|access denied|could not read (username|password)|repository not found'; then
-  echo "Shared memories: auto-push failed (authentication or permissions). Will retry on next Stop."
+# git exits 1 when the remote rejects an update — the contention this loop is
+# for — and 128 on fatal errors: auth, network, missing repository. Matching
+# message text instead would break under any non-English locale, which is what
+# the LC_ALL=C above the pull exists to prevent.
+if [ "$push_rc" -ne 1 ]; then
+  echo "Shared memories: auto-push failed (not a rejected update — auth, network or repository). Will retry on next Stop."
   [ -n "$push_err" ] && printf '  %s\n' "$push_err"
   break
 fi

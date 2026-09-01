@@ -252,6 +252,15 @@ export type ConfigureFixture = {
 	readonly trailingSlash?: boolean;
 	/** Skipped when running as root, where the fixture's premise does not hold. */
 	readonly skipAsRoot?: boolean;
+	/**
+	 * A deliberate departure from the recorded bash behaviour. The golden keeps
+	 * recording what the bash did; this states what we now do instead, and why.
+	 */
+	readonly deviation?: {
+		readonly reason: string;
+		readonly stdout?: (recorded: string) => string;
+		readonly code?: number;
+	};
 };
 
 /** The migration backup embeds a HH:MM:SS stamp, so the two runs cannot share it. */

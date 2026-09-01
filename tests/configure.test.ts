@@ -10,22 +10,32 @@ import { git, readGolden, runConfigure, type ConfigureFixture, type RunResult } 
  * this pack replaced and verified against it fixture by fixture before the bash
  * was removed. A drift here is a change in what the pack does, not a stale test.
  */
-function check(name: string, actual: RunResult, expect?: RegExp): void {
-	const golden = readGolden(name);
-	assert.ok(golden, `no golden recorded for "${name}"`);
-	assert.equal(actual.stdout, golden.stdout, `stdout drifted from recorded behaviour for "${name}"`);
-	assert.equal(actual.code, golden.code, `exit code drifted for "${name}"`);
-	assert.equal(actual.stderr, golden.stderr, `stderr drifted from recorded behaviour for "${name}"`);
-	assert.equal(actual.git, golden.git, `resulting state drifted for "${name}"\ngolden:\n${golden.git}\n\nactual:\n${actual.git}`);
+function check(fx: ConfigureFixture, actual: RunResult): void {
+	const golden = readGolden(fx.name);
+	assert.ok(golden, `no golden recorded for "${fx.name}"`);
+
+	const wantStdout = fx.deviation?.stdout ? fx.deviation.stdout(golden.stdout) : golden.stdout;
+	const wantCode = fx.deviation?.code ?? golden.code;
+	if (fx.deviation) {
+		assert.ok(
+			wantStdout !== golden.stdout || wantCode !== golden.code,
+			`"${fx.name}" declares a deviation that is identical to the recorded bash behaviour`,
+		);
+	}
+
+	assert.equal(actual.stdout, wantStdout, `stdout drifted for "${fx.name}"`);
+	assert.equal(actual.code, wantCode, `exit code drifted for "${fx.name}"`);
+	assert.equal(actual.stderr, golden.stderr, `stderr drifted for "${fx.name}"`);
+	assert.equal(actual.git, golden.git, `resulting .claude/ drifted for "${fx.name}"`);
 	// A fixture where nothing happens passes vacuously, so pin what was recorded.
-	if (expect) assert.match(golden.stdout + golden.stderr, expect, `fixture "${name}" never exercised what it claims to`);
+	if (fx.expect) assert.match(golden.stdout + golden.stderr, fx.expect, `fixture "${fx.name}" never exercised what it claims to`);
+	if (fx.expectCode !== undefined) {
+		assert.equal(wantCode, fx.expectCode, `fixture "${fx.name}" did not reach the state it claims`);
+	}
 }
 
 function assertParity(fx: ConfigureFixture): void {
-	check(fx.name, runConfigure(fx), fx.expect);
-	if (fx.expectCode !== undefined) {
-		assert.equal((readGolden(fx.name) as RunResult).code, fx.expectCode, `fixture "${fx.name}" did not reach the state it claims`);
-	}
+	check(fx, runConfigure(fx));
 }
 
 const local = (claude: string, name: string, body = "Local memory.\n") => {
@@ -149,9 +159,15 @@ describe("configure-memories — bash and TypeScript agree", () => {
 const audited: readonly ConfigureFixture[] = [
 	{
 		name: "audited: a bootstrap branch with no memories tree exits 2 without Done",
-		expectCode: 2,
+		expectCode: 0,
 		expect: /Cloning shared memories/,
 		emptyRemote: true,
+		deviation: {
+			reason:
+				"The bash ended with `count=$(ls \"$link\"/*.md ...)`; under `set -e -o pipefail` an unmatched glob made ls exit 2 and killed the script, so a first install against an empty branch reported failure and printed no Done line.",
+			stdout: (recorded) => `${recorded}Done. 0 memory file(s) available at <TMP>/work/project/.claude/memories.\n`,
+			code: 0,
+		},
 	},
 	{
 		name: "audited: a subdirectory in the migration backup is left behind",
@@ -233,4 +249,12 @@ describe("audited configure edges — bash and TypeScript agree", () => {
 		// A read-only directory does not stop root, so that fixture proves nothing there.
 		test(fx.name, { skip: fx.skipAsRoot === true && root }, () => assertParity(fx));
 	}
+});
+
+describe("configure-memories — deliberate fixes to defects in the bash", () => {
+	test("a bootstrap install against a branch with no memories reports success", () => {
+		const r = runConfigure({ name: "bootstrap", emptyRemote: true });
+		assert.equal(r.code, 0, "a first install is not a failure");
+		assert.match(r.stdout, /Done\. 0 memory file\(s\) available at/);
+	});
 });

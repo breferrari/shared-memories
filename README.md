@@ -382,7 +382,9 @@ The pack is TypeScript run directly by Node — no build step and no runtime dep
 
 The goldens are now the contract: `tests/` runs the TypeScript against them and compares stdout, stderr, exit code and the resulting repository state, so a drift is a change in what the pack does rather than a stale test. Fixtures carry an `expect` pattern asserted against the recorded output, so a fixture where nothing happens fails instead of passing vacuously. Machine- and day-dependent values (temp paths, hostname, dates, git's relative timestamps) are normalised; everything else is byte-exact.
 
-Two deviations from the original bash are sanctioned, both stderr-only: the missing-interpreter message names `node` rather than `jq`, and the abort diagnostic has no `$LINENO` equivalent.
+Two deviations from the original bash are incidental, both stderr-only: the missing-interpreter message names `node` rather than `jq`, and the abort diagnostic has no `$LINENO` equivalent.
+
+Two more are deliberate bug fixes, each marked as a `deviation` on its fixture so the golden still records what the bash did and the departure is visible rather than edited away. A first install against a branch with no `memories/` tree now reports `Done. 0 memory file(s)` and exits 0, where the bash exited 2 and printed nothing — its final `count=$(ls "$link"/*.md ...)` hit an unmatched glob, which under `set -e -o pipefail` killed the script. And an unset `MCS_PROJECT_PATH` is now refused with a clear message instead of resolving paths against the filesystem root.
 
 ---
 

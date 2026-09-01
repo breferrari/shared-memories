@@ -249,11 +249,8 @@ function main(): void {
 		}
 	}
 
-	// `count=$(ls "$link"/*.md | ...)` under `set -e -o pipefail`: an unmatched glob
-	// makes ls exit 2 and takes the script with it, so Done never prints. The glob
-	// also skips dotfiles. Faithful to the bash, including that it is a defect.
+	// Dotfiles are excluded because the bash counted with an `ls *.md` glob.
 	const mds = entries(link).filter((f) => !f.startsWith(".") && f.endsWith(".md"));
-	if (mds.length === 0) process.exit(2);
 	out(`Done. ${mds.length} memory file(s) available at ${link}.`);
 }
 

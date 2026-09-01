@@ -330,6 +330,19 @@ if [ "$committed" -eq 1 ]; then
 fi
 [ "$unpushed" -eq 0 ] && exit 0
 
+# Every engineer's Stop hook fires at a turn boundary, so a team pushes to one
+# branch within the same instant. A single attempt lands exactly one writer no
+# matter how many are pushing, and "will retry on next Stop" lands in the next
+# simultaneous burst and loses the same race — so the memories keep being
+# written locally and quietly stop arriving.
+# The bound has to scale with how many people push at once: one writer wins per
+# round, so N writers need at least N rounds. Measured against this hook — 1 of
+# 10 with a single attempt, 5 of 10 with five, 10 of 10 with fifteen. Twelve is
+# the default because it covers a team of about ten and costs at most a few
+# seconds in the worst case; a larger team should raise it.
+push_attempts=${MEMORIES_PUSH_ATTEMPTS:-12}
+attempt=1
+while :; do
 if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quiet 2>&1); then
   # Distinguish actual rebase conflicts from network/auth/etc. so the message
   # matches reality. LC_ALL=C above forces English git output so the CONFLICT
@@ -349,7 +362,21 @@ if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quie
   exit 0
 fi
 
-if ! push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
-  echo "Shared memories: auto-push failed. Will retry on next Stop."
-  [ -n "$push_err" ] && printf '  %s\n' "$push_err"
+if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
+  break
 fi
+
+if [ "$attempt" -ge "$push_attempts" ]; then
+  echo "Shared memories: auto-push failed after $attempt attempt(s). Will retry on next Stop."
+  [ -n "$push_err" ] && printf '  %s\n' "$push_err"
+  break
+fi
+
+# Full jitter, not fixed backoff: a fixed delay re-synchronises exactly the
+# writers that just collided, which is the thing it is meant to fix. The
+# exponential is CAPPED — uncapped, 0.05*2^n reaches 51s by the tenth attempt
+# and the hook stops being something you can run at a turn boundary. awk is
+# already a dependency of this pack, so nothing new is required.
+sleep "$(awk -v a="$attempt" 'BEGIN{srand();d=0.05*(2^a);if(d>1.5)d=1.5;printf "%.3f", rand()*d}')"
+attempt=$((attempt+1))
+done

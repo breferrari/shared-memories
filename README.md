@@ -9,6 +9,8 @@ identifier: shared-memories
 requires:   mcs >= 2026.4.12
 ```
 
+**Contents** — [When is this useful?](#when-is-this-useful) · [The problem](#the-problem) · [How it works](#how-it-works) · [What's included](#whats-included) · [Installation](#installation) · [Directory structure](#directory-structure) · [Migration](#migration-from-an-existing-local-memories-folder) · [Side branches](#optional-push-to-a-side-branch) · [Auto-push modes](#auto-push-modes) · [Deletions](#intentional-deletion-workflow) · [Troubleshooting](#troubleshooting) · [Development](#development)
+
 ---
 
 ## When Is This Useful?
@@ -36,25 +38,14 @@ The obvious fix is a shared git repo. Two friction points kill adoption:
 
 This pack implements a **closed-loop sharing system** that pulls the latest team memories at session start and pushes new ones when Claude finishes a turn.
 
-```
-                             SHARED MEMORIES LOOP
-
- ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
- │   SESSION    │     │   TEAM KB    │     │     WORK     │     │     STOP     │
- │    START     │────>│    PULL      │────>│   SESSION    │────>│  AUTO-PUSH   │
- └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-        ^                    |                    |                     |
-        |                    |                    |     filename guard  |
-        |                    |                    |     + configurable  |
-        |                    v                    v     push policy     v
-        |             ┌────────────────────────────────────────────────────┐
-        |             │              <shared memories repo>                 │
-        |             │  memories/                                          │
-        |             │    learning_background_task_watchdog_timeout.md     │
-        +─────────────│    learning_orm_batch_insert_memory_spike.md        │
-                      │    decision_architecture_mvvm_coordinators.md       │
-                      │    ...                                              │
-                      └────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    S([Session starts]) --> P["SessionStart hook<br/>git pull --ff-only"]
+    P --> W["Work session<br/>continuous-learning writes<br/>learning_*.md · decision_*.md"]
+    W --> T["Stop hook<br/>auto-push"]
+    T -->|"filename guard<br/>+ configurable push policy"| R
+    R[("shared memories repo<br/>memories/<br/>learning_background_task_watchdog_timeout.md<br/>learning_orm_batch_insert_memory_spike.md<br/>decision_architecture_mvvm_coordinators.md<br/>…")]
+    R -->|"teammates fast-forward<br/>at their next session start"| P
 ```
 
 Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). This pack is the distribution layer that makes them team-shared.
@@ -89,6 +80,24 @@ Captures still come from [`mcs-cli/memory`](https://github.com/mcs-cli/memory). 
    - **`review`** — nothing auto; the hook prints a per-file report and the user (or Claude, via the PostToolUse nudge) invokes `/approve-memories` to push, or runs the discard commands shown in the report
 
 5. **Next session** — teammates pull your new memories via SessionStart and the loop continues
+
+The Stop hook in full, since it is where all the policy lives:
+
+```mermaid
+flowchart TD
+    A([Claude finishes a turn]) --> B{"anything uncommitted<br/>or unpushed?"}
+    B -->|no| Z([exit 0])
+    B -->|yes| C{"every dirty file matches<br/>memories/learning_*.md<br/>or memories/decision_*.md?"}
+    C -->|no| D["list the offenders,<br/>push nothing"] --> Z
+    C -->|yes| E{MEMORIES_AUTOPUSH_MODE}
+    E -->|auto| F["stage adds and mods,<br/>park deletions for review"]
+    E -->|full| G["stage everything,<br/>deletions included"]
+    E -->|review| H["print the per-file report,<br/>commit nothing"]
+    F --> I["commit · pull --rebase --autostash · push<br/>retry with jitter if rejected"]
+    G --> I
+    H --> Z
+    I --> Z
+```
 
 ---
 
@@ -212,8 +221,11 @@ shared-memories/
 │   └── doctor-memories-remote.ts    # Remote-access health check
 ├── tests/                           # node:test — unit, contract and behaviour
 │   └── golden/                      # Recorded behaviour of the bash this replaced
-└── templates/
-    └── instructions.md              # CLAUDE.local.md section — what this dir is
+├── templates/
+│   └── instructions.md              # CLAUDE.local.md section — what this dir is
+├── .github/workflows/ci.yml         # macOS × Node 22/24
+├── package.json                     # No dependencies; test + typecheck scripts
+└── tsconfig.json                    # Strict, erasable-syntax-only, no emit
 ```
 
 On engineer disks, the pack materializes as:
@@ -243,7 +255,21 @@ Engineers who already have `.claude/memories/` populated (from `mcs-cli/memory`,
 5. Well-named migrated files are auto-committed and pushed so they immediately become team knowledge
 6. If nothing is left in the backup dir, it's cleaned up automatically
 
-If any step fails partway, an `ERR` trap restores the original folder from the backup — you're never left with a broken setup and no memories.
+If any step fails partway, the failure path restores the original folder from the backup — you're never left with a broken setup and no memories.
+
+Each file in the backup takes one of four paths:
+
+```mermaid
+flowchart TD
+    A["a file in the migration backup"] --> B{"a file of that name<br/>already in the shared repo?"}
+    B -->|yes| C["skip — the shared copy wins,<br/>yours stays in the backup"]
+    B -->|no| D{"deleted somewhere in<br/>the branch's history?"}
+    D -->|yes| E["hold back, naming the<br/>commit that removed it"]
+    D -->|no| F["import into memories/"]
+    F --> G{"matches the naming rule?"}
+    G -->|yes| H["auto-commit and push"]
+    G -->|no| I["leave untracked,<br/>with a rename nudge"]
+```
 
 ### Why previously-deleted files are held back
 
@@ -372,7 +398,7 @@ Anything not matching `memories/(learning|decision)_*.md` needs renaming.
 ## Development
 
 ```bash
-npm test                                             # unit, contract and differential suites
+npm test                                             # unit, contract and behaviour suites
 npm run typecheck                                    # tsc --noEmit (deps install ad hoc in CI)
 ```
 

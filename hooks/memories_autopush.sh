@@ -341,6 +341,14 @@ fi
 # the default because it covers a team of about ten and costs at most a few
 # seconds in the worst case; a larger team should raise it.
 push_attempts=${MEMORIES_PUSH_ATTEMPTS:-12}
+# Validate before it reaches a numeric comparison. An empty or non-integer value
+# ("12s", "abc") makes `[ "$attempt" -ge "$push_attempts" ]` error, and under the
+# ERR trap at the top of this file that aborts the hook silently — turning a
+# typo in an env var into memories that stop syncing with no message at all.
+case "$push_attempts" in
+  ''|*[!0-9]*) push_attempts=12 ;;
+  0)           push_attempts=1  ;;
+esac
 attempt=1
 while :; do
 if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quiet 2>&1); then
@@ -366,6 +374,15 @@ if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
   break
 fi
 
+# Retry contention, not credentials. An auth or permission failure will fail
+# identically twelve times, and all the retry buys is turn-boundary latency
+# before the same message.
+if printf '%s' "$push_err" | grep -qiE 'authentication failed|permission denied|access denied|could not read (username|password)|repository not found'; then
+  echo "Shared memories: auto-push failed (authentication or permissions). Will retry on next Stop."
+  [ -n "$push_err" ] && printf '  %s\n' "$push_err"
+  break
+fi
+
 if [ "$attempt" -ge "$push_attempts" ]; then
   echo "Shared memories: auto-push failed after $attempt attempt(s). Will retry on next Stop."
   [ -n "$push_err" ] && printf '  %s\n' "$push_err"
@@ -377,6 +394,12 @@ fi
 # exponential is CAPPED — uncapped, 0.05*2^n reaches 51s by the tenth attempt
 # and the hook stops being something you can run at a turn boundary. awk is
 # already a dependency of this pack, so nothing new is required.
-sleep "$(awk -v a="$attempt" 'BEGIN{srand();d=0.05*(2^a);if(d>1.5)d=1.5;printf "%.3f", rand()*d}')"
+# Seed explicitly. awk's srand() with no argument seeds from the clock at
+# one-second resolution, so every writer colliding in the same second draws the
+# SAME "random" delay and they all wake together — a fixed backoff wearing
+# jitter's clothes, which is the exact thing this is meant to avoid. Verified:
+# six processes in one second returned 0.399 apiece.
+jitter_seed=$(( ${RANDOM:-0} ^ $$ ^ attempt ))
+sleep "$(awk -v a="$attempt" -v seed="$jitter_seed" 'BEGIN{srand(seed);d=0.05*(2^a);if(d>1.5)d=1.5;printf "%.3f", rand()*d}')"
 attempt=$((attempt+1))
 done

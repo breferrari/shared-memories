@@ -361,11 +361,12 @@ fi
 
 if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
   break
+else
+  push_rc=$?
 fi
 
-# Auth failures fail identically every attempt; only contention is worth retrying.
-if printf '%s' "$push_err" | grep -qiE 'authentication failed|permission denied|access denied|could not read (username|password)|repository not found'; then
-  echo "Shared memories: auto-push failed (authentication or permissions). Will retry on next Stop."
+if [ "$push_rc" -ne 1 ]; then
+  echo "Shared memories: auto-push failed (not a rejected update — auth, network or repository). Will retry on next Stop."
   [ -n "$push_err" ] && printf '  %s\n' "$push_err"
   break
 fi

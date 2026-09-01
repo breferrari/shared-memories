@@ -330,21 +330,10 @@ if [ "$committed" -eq 1 ]; then
 fi
 [ "$unpushed" -eq 0 ] && exit 0
 
-# Every engineer's Stop hook fires at a turn boundary, so a team pushes to one
-# branch within the same instant. A single attempt lands exactly one writer no
-# matter how many are pushing, and "will retry on next Stop" lands in the next
-# simultaneous burst and loses the same race — so the memories keep being
-# written locally and quietly stop arriving.
-# The bound has to scale with how many people push at once: one writer wins per
-# round, so N writers need at least N rounds. Measured against this hook — 1 of
-# 10 with a single attempt, 5 of 10 with five, 10 of 10 with fifteen. Twelve is
-# the default because it covers a team of about ten and costs at most a few
-# seconds in the worst case; a larger team should raise it.
+# Stop hooks fire at turn boundaries, so a team pushes to one branch at the same
+# instant and a single attempt lands exactly one writer.
 push_attempts=${MEMORIES_PUSH_ATTEMPTS:-12}
-# Validate before it reaches a numeric comparison. An empty or non-integer value
-# ("12s", "abc") makes `[ "$attempt" -ge "$push_attempts" ]` error, and under the
-# ERR trap at the top of this file that aborts the hook silently — turning a
-# typo in an env var into memories that stop syncing with no message at all.
+# A non-integer would error in the numeric test below and hit the ERR trap.
 case "$push_attempts" in
   ''|*[!0-9]*) push_attempts=12 ;;
   0)           push_attempts=1  ;;
@@ -374,9 +363,7 @@ if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
   break
 fi
 
-# Retry contention, not credentials. An auth or permission failure will fail
-# identically twelve times, and all the retry buys is turn-boundary latency
-# before the same message.
+# Auth failures fail identically every attempt; only contention is worth retrying.
 if printf '%s' "$push_err" | grep -qiE 'authentication failed|permission denied|access denied|could not read (username|password)|repository not found'; then
   echo "Shared memories: auto-push failed (authentication or permissions). Will retry on next Stop."
   [ -n "$push_err" ] && printf '  %s\n' "$push_err"
@@ -389,16 +376,9 @@ if [ "$attempt" -ge "$push_attempts" ]; then
   break
 fi
 
-# Full jitter, not fixed backoff: a fixed delay re-synchronises exactly the
-# writers that just collided, which is the thing it is meant to fix. The
-# exponential is CAPPED — uncapped, 0.05*2^n reaches 51s by the tenth attempt
-# and the hook stops being something you can run at a turn boundary. awk is
-# already a dependency of this pack, so nothing new is required.
-# Seed explicitly. awk's srand() with no argument seeds from the clock at
-# one-second resolution, so every writer colliding in the same second draws the
-# SAME "random" delay and they all wake together — a fixed backoff wearing
-# jitter's clothes, which is the exact thing this is meant to avoid. Verified:
-# six processes in one second returned 0.399 apiece.
+# Full jitter, capped at 1.5s. Seeded explicitly because awk's srand() reads the
+# clock at one-second resolution — writers colliding in the same second would
+# otherwise draw identical delays and wake together.
 jitter_seed=$(( ${RANDOM:-0} ^ $$ ^ attempt ))
 sleep "$(awk -v a="$attempt" -v seed="$jitter_seed" 'BEGIN{srand(seed);d=0.05*(2^a);if(d>1.5)d=1.5;printf "%.3f", rand()*d}')"
 attempt=$((attempt+1))

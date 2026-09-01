@@ -359,12 +359,12 @@ if ! pull_err=$(LC_ALL=C git -C "$memories_dir" pull --rebase --autostash --quie
   exit 0
 fi
 
-push_err=$(git -C "$memories_dir" push --quiet 2>&1) && push_rc=0 || push_rc=$?
-if [ "$push_rc" -eq 0 ]; then
+if push_err=$(git -C "$memories_dir" push --quiet 2>&1); then
   break
+else
+  push_rc=$?
 fi
 
-# 1 = rejected update (contention, worth retrying). Anything else is fatal.
 if [ "$push_rc" -ne 1 ]; then
   echo "Shared memories: auto-push failed (not a rejected update — auth, network or repository). Will retry on next Stop."
   [ -n "$push_err" ] && printf '  %s\n' "$push_err"

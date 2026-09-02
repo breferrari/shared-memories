@@ -97,9 +97,10 @@ describe("the naming rule has one definition", () => {
 		assert.equal(ALLOWED_PATTERN.source, "^memories\\/(learning|decision)_[a-zA-Z0-9_-]+\\.md$");
 	});
 
-	test("no stale keep-in-sync comments survive in the TypeScript", () => {
-		for (const dir of ["runtime", "runtime/lib", "scripts"]) {
-			for (const f of readdirSync(join(REPO, dir)).filter((n) => n.endsWith(".ts") || n.endsWith(".mts"))) {
+	test("nothing shipped still points at a second copy of the rule", () => {
+		// commands/ ships to consumers and Claude reads it, so it counts as much as the code.
+		for (const dir of ["runtime", "runtime/lib", "scripts", "commands", "templates"]) {
+			for (const f of readdirSync(join(REPO, dir)).filter((n) => /\.(m?ts|md)$/.test(n))) {
 				const body = readFileSync(join(REPO, dir, f), "utf8");
 				assert.doesNotMatch(body, /keep in sync/i, `${dir}/${f} still points at a second copy`);
 			}

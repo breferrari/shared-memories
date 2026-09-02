@@ -6,11 +6,13 @@ export type NumStat = { readonly added: string; readonly deleted: string; readon
 export type Pending = {
 	readonly uncommitted: number;
 	readonly unpushed: number;
-	readonly untracked: string[];
-	readonly numstats: NumStat[];
-	readonly addedModified: string[];
-	readonly deleted: string[];
+	readonly untracked: readonly string[];
+	readonly numstats: readonly NumStat[];
+	readonly deleted: readonly string[];
 };
+
+/** The paths `git diff --numstat --diff-filter=AM` reported, derived rather than stored. */
+export const modifiedPaths = (p: Pending): string[] => p.numstats.map((n) => n.path).filter(Boolean);
 
 export function uncommittedCount(repo: string): number {
 	return gitLines(repo, ["status", "--porcelain", "--", "memories/"]).length;
@@ -18,19 +20,18 @@ export function uncommittedCount(repo: string): number {
 
 export function collect(repo: string, uncommitted: number, unpushed: number): Pending {
 	if (uncommitted === 0) {
-		return { uncommitted, unpushed, untracked: [], numstats: [], addedModified: [], deleted: [] };
+		return { uncommitted, unpushed, untracked: [], numstats: [], deleted: [] };
 	}
 	const untracked = gitLines(repo, ["ls-files", "--others", "--exclude-standard", "--full-name", "--", "memories/"]);
 	const numstats = gitLines(repo, ["diff", "--numstat", "--diff-filter=AM", "HEAD", "--", "memories/"])
 		.map((l) => l.split("\t"))
-		.filter((p): p is [string, string, string] => p.length >= 3 && p[2] !== undefined)
+		.filter((p): p is [string, string, string] => p.length === 3)
 		.map(([added, deleted, path]) => ({ added, deleted, path }));
 	return {
 		uncommitted,
 		unpushed,
 		untracked,
 		numstats,
-		addedModified: numstats.map((n) => n.path),
 		deleted: gitLines(repo, ["diff", "--name-only", "--diff-filter=D", "HEAD", "--", "memories/"]),
 	};
 }

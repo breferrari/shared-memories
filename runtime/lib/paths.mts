@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 
-/** Entries live at <project>/.claude/shared-memories/hooks/, three levels down. */
+/** Entries live at <project>/.claude/hooks/<pack-id>/, three levels down. */
 export function projectRoot(hookDir: string): string {
 	return resolve(hookDir, "..", "..", "..");
 }

@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { additionalContext, failOpen, isJsonStream, readStdin, warn } from "./lib/hook-io.mts";
 import { gitLines, gitPresent, isWorkTree, unpushedCount, git } from "./lib/git.mts";
-import { resolveMode } from "./lib/mode.mts";
+import { MODES, resolveMode } from "./lib/mode.mts";
 import { memoriesRepo, projectRoot } from "./lib/paths.mts";
 
 const NAME = "memories_pull";
@@ -19,11 +19,11 @@ failOpen(NAME, () => {
 	}
 
 	const raw = process.env["MEMORIES_AUTOPUSH_MODE"];
-	const { mode, unknown } = resolveMode(raw);
+	const { mode, unrecognised } = resolveMode(raw);
 	const modeWarning =
-		unknown === null
+		unrecognised === null
 			? ""
-			: `Shared memories: unknown MEMORIES_AUTOPUSH_MODE='${unknown}' — falling back to auto. Fix the value in .claude/settings.local.json (valid: auto, full, review) and restart the session.`;
+			: `Shared memories: unknown MEMORIES_AUTOPUSH_MODE='${unrecognised}' — falling back to auto. Fix the value in .claude/settings.local.json (valid: ${MODES.join(", ")}) and restart the session.`;
 
 	git(repo, ["pull", "--ff-only", "--quiet"]);
 

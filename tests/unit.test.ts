@@ -12,11 +12,11 @@ describe("mode resolution", () => {
 		test(`${JSON.stringify(raw)} resolves to ${mode}`, () => {
 			const r = resolveMode(raw);
 			assert.equal(r.mode, mode);
-			assert.equal(r.unknown, null);
+			assert.equal(r.unrecognised, null);
 		});
 	}
 	test("an unrecognised value falls back to auto and is reported", () => {
-		assert.deepEqual(resolveMode("banana"), { mode: "auto", unknown: "banana" });
+		assert.deepEqual(resolveMode("banana"), { mode: "auto", unrecognised: "banana" });
 	});
 });
 
@@ -67,7 +67,6 @@ const pending = (over: Partial<Pending> = {}): Pending => ({
 	unpushed: 0,
 	untracked: [],
 	numstats: [],
-	addedModified: [],
 	deleted: [],
 	...over,
 });
@@ -80,7 +79,7 @@ describe("review state", () => {
 	});
 	test("distinguishes a new file from a modified one", () => {
 		const a = canonicalState(pending({ untracked: ["memories/a.md"] }), "");
-		const b = canonicalState(pending({ addedModified: ["memories/a.md"] }), "");
+		const b = canonicalState(pending({ numstats: [{ added: "1", deleted: "0", path: "memories/a.md" }] }), "");
 		assert.notEqual(hashState(a), hashState(b));
 	});
 	test("ignores content, so re-editing the same file does not reprint", () => {

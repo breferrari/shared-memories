@@ -1,18 +1,21 @@
-export type Mode = "auto" | "full" | "review";
+export const MODES = ["auto", "full", "review"] as const;
+export type Mode = (typeof MODES)[number];
 
-export type ModeResult = { readonly mode: Mode; readonly unknown: string | null };
+export type ModeResult =
+	| { readonly mode: Mode; readonly unrecognised: null }
+	| { readonly mode: "auto"; readonly unrecognised: string };
 
 export function resolveMode(raw: string | undefined): ModeResult {
 	switch (raw) {
 		case undefined:
 		case "":
 		case "auto":
-			return { mode: "auto", unknown: null };
+			return { mode: "auto", unrecognised: null };
 		case "full":
-			return { mode: "full", unknown: null };
+			return { mode: "full", unrecognised: null };
 		case "review":
-			return { mode: "review", unknown: null };
+			return { mode: "review", unrecognised: null };
 		default:
-			return { mode: "auto", unknown: raw };
+			return { mode: "auto", unrecognised: raw };
 	}
 }

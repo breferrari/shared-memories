@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gitOut } from "./git.mts";
-import type { Pending } from "./pending.mts";
+import { modifiedPaths, type Pending } from "./pending.mts";
 
 /** Only these three break terminal autolinking of file:// URLs; the bash leaves the rest. */
 export function urlEncodePath(p: string): string {
@@ -28,7 +28,7 @@ export function preview(repo: string, file: string): string {
 export function canonicalState(p: Pending, headSha: string): string {
 	const lines = [
 		...p.untracked.filter(Boolean).map((f) => `NEW\t${f}`),
-		...p.addedModified.filter(Boolean).map((f) => `MOD\t${f}`),
+		...modifiedPaths(p).map((f) => `MOD\t${f}`),
 		...p.deleted.filter(Boolean).map((f) => `DEL\t${f}`),
 	];
 	if (p.unpushed > 0 && headSha !== "") lines.push(`UNPUSHED\t${headSha}\t${p.unpushed}`);
@@ -50,7 +50,7 @@ export function describe(fileCount: number, unpushed: number): string {
 export function renderReport(repo: string, p: Pending): string[] {
 	const out: string[] = [];
 	const news = p.untracked.filter(Boolean);
-	const mods = p.addedModified.filter(Boolean);
+	const mods = modifiedPaths(p);
 	const dels = p.deleted.filter(Boolean);
 	out.push(`Shared memories [review mode]: ${describe(news.length + mods.length + dels.length, p.unpushed)}`);
 

@@ -189,7 +189,7 @@ function invoke(project: string, hook: HookName, fx: Fixture): Omit<RunResult, "
 	return { stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1 };
 }
 
-export function gitState(repo: string, project: string): string {
+export function gitState(repo: string): string {
 	const upstream = git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
 	return [
 		// Repo-wide, deliberately: a snapshot scoped to memories/ is blind to the
@@ -220,7 +220,7 @@ export function runHook(fx: Fixture): RunResult {
 			fx.betweenRuns?.(repo, project);
 			last = invoke(project, fx.hook, fx);
 		}
-		return normalizeRun({ ...last, git: gitState(repo, project) }, root);
+		return normalizeRun({ ...last, git: gitState(repo) }, root);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -250,7 +250,7 @@ export function runScript(fx: ScriptFixture): RunResult {
 			env: { ...process.env, ...HERMETIC, MCS_PROJECT_PATH: project },
 		});
 		return normalizeRun(
-			{ stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1, git: gitState(repo, project) },
+			{ stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1, git: gitState(repo) },
 			root,
 		);
 	} finally {

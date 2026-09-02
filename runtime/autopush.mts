@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { git, gitPresent, isWorkTree, unpushedCount } from "./lib/git.mts";
 import { failOpen, isJsonStream, readStdin, say, warn } from "./lib/hook-io.mts";
 import { resolveMode } from "./lib/mode.mts";
-import { badNames, collect, headSha, uncommittedCount } from "./lib/pending.mts";
+import { badNames, collect, headSha, modifiedPaths, uncommittedCount } from "./lib/pending.mts";
 import { memoriesRepo, projectRoot } from "./lib/paths.mts";
 import { RENAME_HINT } from "./lib/naming.mts";
 import { canonicalState, hashState, renderReport } from "./lib/report.mts";
@@ -99,7 +99,7 @@ failOpen(NAME, () => {
 				say("If intentional (e.g. after memory-audit), approve them:");
 				say("  /approve-memories audit cleanup");
 			}
-			const stageable = [...new Set([...pending.addedModified, ...pending.untracked])].filter(Boolean).sort();
+			const stageable = [...new Set([...modifiedPaths(pending), ...pending.untracked])].filter(Boolean).sort();
 			for (const f of stageable) stage(repo, ["add", "--", f]);
 		} else {
 			stage(repo, ["add", "-A", "--", "memories/"]);

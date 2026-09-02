@@ -164,7 +164,12 @@ function main(): void {
 			restoreBackup();
 			process.exit(clone.exit ?? 1);
 		}
-		git(repoDir, ["sparse-checkout", "set", "memories"], { inheritStderr: true });
+		// Materialises memories/; the mkdir below would otherwise mask its failure.
+		const sparse = git(repoDir, ["sparse-checkout", "set", "memories"], { inheritStderr: true });
+		if (!sparse.ok) {
+			restoreBackup();
+			process.exit(sparse.exit ?? 1);
+		}
 		// A bootstrap branch has no memories/ tree, and the link would dangle.
 		mkdirSync(join(repoDir, "memories"), { recursive: true });
 		linkMemories();
@@ -182,7 +187,14 @@ function main(): void {
 
 		for (const name of entries(migrationBackup)) {
 			const from = join(migrationBackup, name);
-			if (!statSync(from).isFile()) continue;
+			// `[ -f "$f" ] || continue` is false for a dangling symlink rather than fatal.
+			let entry: ReturnType<typeof statSync>;
+			try {
+				entry = statSync(from);
+			} catch {
+				continue;
+			}
+			if (!entry.isFile()) continue;
 			const target = join(link, name);
 			if (exists(target)) {
 				skipped++;
@@ -228,10 +240,15 @@ function main(): void {
 		const bad = untracked.filter((f) => !ALLOWED_PATTERN.test(f));
 
 		if (good.length > 0) {
-			for (const f of good) git(repoDir, ["add", "--", f], { inheritStderr: true });
-			git(repoDir, ["commit", "-m", `auto: migrate local memories from ${hostname().split(".")[0]}`, "--quiet"], {
+			for (const f of good) {
+				const add = git(repoDir, ["add", "--", f], { inheritStderr: true });
+				if (!add.ok) process.exit(add.exit ?? 1);
+			}
+			// Unchecked, the push below succeeds vacuously and reports one that never happened.
+			const commit = git(repoDir, ["commit", "-m", `auto: migrate local memories from ${hostname().split(".")[0]}`, "--quiet"], {
 				inheritStderr: true,
 			});
+			if (!commit.ok) process.exit(commit.exit ?? 1);
 			if (git(repoDir, ["pull", "--rebase", "--autostash", "--quiet"]).ok) {
 				if (git(repoDir, ["push", "--quiet"]).ok) {
 					out("Pushed migrated memories to the shared branch.");

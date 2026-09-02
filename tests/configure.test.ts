@@ -251,6 +251,37 @@ describe("audited configure edges — bash and TypeScript agree", () => {
 	}
 });
 
+const unchecked: readonly ConfigureFixture[] = [
+	{
+		// A fresh machine has no git identity, which is exactly when configureProject first runs.
+		name: "unchecked: a failed migration commit is not reported as a push",
+		expectCode: 128,
+		expect: /Migration: imported 1 local memory file\(s\)/,
+		env: {
+			GIT_CONFIG_GLOBAL: "/dev/null",
+			GIT_CONFIG_SYSTEM: "/dev/null",
+			GIT_AUTHOR_NAME: "",
+			GIT_AUTHOR_EMAIL: "",
+			GIT_COMMITTER_NAME: "",
+			GIT_COMMITTER_EMAIL: "",
+		},
+		pre: (_project, claude) => local(claude, "learning_mine_own.md"),
+	},
+	{
+		name: "unchecked: a dangling symlink is skipped, not fatal",
+		expectCode: 0,
+		expect: /Migration: imported 1 local memory file\(s\)/,
+		pre: (_project, claude) => {
+			local(claude, "learning_mine_own.md");
+			symlinkSync("/nonexistent/target.md", join(claude, "memories", "learning_dangling_link.md"));
+		},
+	},
+];
+
+describe("unchecked git results — bash and TypeScript agree", () => {
+	for (const fx of unchecked) test(fx.name, () => assertParity(fx));
+});
+
 describe("configure-memories — deliberate fixes to defects in the bash", () => {
 	test("an unset MCS_PROJECT_PATH is refused rather than resolved against the filesystem root", () => {
 		// The bash built "$MCS_PROJECT_PATH/.claude/..." by concatenation, so an empty

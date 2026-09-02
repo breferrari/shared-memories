@@ -58,8 +58,7 @@ export function unpushedCount(dir: string): number {
 	return Number.isNaN(n) ? 0 : n;
 }
 
-/** Whether the binary exists, the question `command -v git` asked. A git that ran and was
- *  then killed is still installed. */
+/** Whether the binary exists, the question `command -v git` asked. */
 export function gitPresent(): boolean {
 	const r = spawnSync("git", ["--version"], { stdio: "ignore" });
 	return (r.error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT";

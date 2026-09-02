@@ -227,6 +227,11 @@ On engineer disks, the pack materializes as:
 
 ```
 <project>/.claude/
+├── hooks/shared-memories/           # executed by mcs; the shebang picks the interpreter
+│   ├── pull.ts
+│   ├── autopush.ts
+│   ├── announce.ts
+│   └── lib/                         # imported as ./lib/… by the entries beside it
 ├── .memories-repo/                  # sparse clone of MEMORIES_BRANCH
 │   ├── README.md, LICENSE, etc.     # any root-level files your repo ships
 │   └── memories/

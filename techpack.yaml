@@ -3,6 +3,9 @@ identifier: shared-memories
 displayName: "Shared Memories"
 description: Team-shared Claude Code memories via a dedicated git repo
 author: Bruno Guidolim
+# NOTE: hooks here are TypeScript executed through their shebang, which needs the
+# mcs release that stopped prefixing hook commands with `bash`. Bump this to that
+# version before merging — on an older mcs the hooks are read as bash and fail.
 minMCSVersion: "2026.4.12"
 
 # Doctor-check scripts are wired via `supplementaryDoctorChecks.command`, which
@@ -46,19 +49,19 @@ components:
     brew: node
 
   # ── Runtime ───────────────────────────────────────────────
-  # mcs registers hooks as `bash .claude/hooks/<pack-id>/<file>`, so each hook
-  # ships as a small bash shim. The logic they exec lives here, copied beside
-  # them as one directory.
+  # The hook entry points are installed by the hook components below; this ships
+  # the library they import, beside them, so `./lib/...` resolves the same way in
+  # the pack checkout and once installed.
   - id: runtime
     displayName: Shared memories runtime
-    description: The TypeScript the hook shims execute. Installed to .claude/shared-memories/.
+    description: The library the hooks import. Installed beside them, in .claude/hooks/shared-memories/lib/.
     isRequired: true
     dependencies: [node]
     type: configuration
     installAction:
       type: copyPackFile
-      source: runtime
-      destination: shared-memories
+      source: runtime/lib
+      destination: hooks/shared-memories/lib
       fileType: generic
 
   # ── Hooks ─────────────────────────────────────────────────
@@ -69,8 +72,8 @@ components:
     hookEvent: SessionStart
     hookTimeout: 15
     hook:
-      source: hooks/memories_pull.sh
-      destination: memories_pull.sh
+      source: runtime/pull.ts
+      destination: pull.ts
 
   - id: hook-memories-autopush
     displayName: Sync shared memories
@@ -80,8 +83,8 @@ components:
     hookTimeout: 30
     hookAsync: true
     hook:
-      source: hooks/memories_autopush.sh
-      destination: memories_autopush.sh
+      source: runtime/autopush.ts
+      destination: autopush.ts
 
   # ── Commands ──────────────────────────────────────────────
   - id: command-approve-memories
@@ -99,8 +102,8 @@ components:
     hookMatcher: Write|Edit|MultiEdit
     hookTimeout: 5
     hook:
-      source: hooks/memories_announce.sh
-      destination: memories_announce.sh
+      source: runtime/announce.ts
+      destination: announce.ts
 
   # ── Configuration ─────────────────────────────────────────
   - id: settings

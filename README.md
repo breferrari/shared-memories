@@ -107,11 +107,11 @@ flowchart TD
 
 | Hook | Event | What It Does |
 |------|-------|-------------|
-| **memories_pull.sh** → `pull.ts` | `SessionStart` | Fast-forwards the shared memories checkout; emits a mode-aware warning if previous state is stuck (or, in `review` mode, summarises pending review) |
-| **memories_autopush.sh** → `autopush.ts` | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
-| **memories_announce.sh** → `announce.ts` | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
+| **pull.ts** | `SessionStart` | Fast-forwards the shared memories checkout; emits a mode-aware warning if previous state is stuck (or, in `review` mode, summarises pending review) |
+| **autopush.ts** | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
+| **announce.ts** | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
 
-Each `.sh` is a four-line shim. mcs registers hooks as `bash .claude/hooks/<pack-id>/<file>`, so a hook file has to be bash whatever its shebang says; the shim's only job is to `exec` the TypeScript beside it. All logic lives in `runtime/`.
+Each is executed directly by mcs, with `#!/usr/bin/env -S node --experimental-strip-types` selecting the interpreter. They install to `.claude/hooks/shared-memories/`, with the library they import beside them in `lib/`.
 
 ### Slash Commands
 
@@ -205,15 +205,10 @@ shared-memories/
 │   └── approve-memories.md          # Slash command for review-mode approval
 ├── config/
 │   └── settings.json                # Templated env block — ships MEMORIES_AUTOPUSH_MODE
-├── hooks/                           # Four-line bash shims; mcs runs hooks via `bash`
-│   ├── memories_pull.sh
-│   ├── memories_autopush.sh
-│   └── memories_announce.sh
-├── runtime/                         # Installed to .claude/shared-memories/
-│   ├── hooks/
-│   │   ├── pull.ts                  # SessionStart: pull + stuck-state warning
-│   │   ├── autopush.ts              # Stop: auto-commit + push (async)
-│   │   └── announce.ts              # PostToolUse: review-mode nudge to Claude (sync)
+├── runtime/                         # Installed to .claude/hooks/shared-memories/
+│   ├── pull.ts                      # SessionStart: pull + stuck-state warning
+│   ├── autopush.ts                  # Stop: auto-commit + push (async)
+│   ├── announce.ts                  # PostToolUse: review-mode nudge to Claude (sync)
 │   └── lib/                         # git, paths, naming, mode, pending, report, push
 ├── scripts/                         # Run in place from the pack checkout
 │   ├── configure-memories.ts        # Sparse clone + symlink + migration
@@ -350,7 +345,7 @@ Discard local changes: …
 
 The same pending set is reported once per session — repeated turns within the session stay silent so the report doesn't spam every prompt. SessionStart resets the dedupe so unresolved changes re-surface in the next session instead of being buried forever.
 
-In `review` mode, Claude is also told about each memory write through a separate PostToolUse hook (`memories_announce.sh`), so it can proactively mention pending review in the same turn and invoke `/approve-memories` when you confirm — without needing to wait for the terminal report. The terminal report and the in-conversation nudge are independent channels: the report goes to your terminal, the nudge goes to Claude's context. `auto` and `full` modes keep both channels silent.
+In `review` mode, Claude is also told about each memory write through a separate PostToolUse hook (`announce.ts`), so it can proactively mention pending review in the same turn and invoke `/approve-memories` when you confirm — without needing to wait for the terminal report. The terminal report and the in-conversation nudge are independent channels: the report goes to your terminal, the nudge goes to Claude's context. `auto` and `full` modes keep both channels silent.
 
 Pull is always automatic regardless of mode — incoming team memories arrive at session start.
 
@@ -404,11 +399,11 @@ npm run typecheck                                    # tsc --noEmit (deps instal
 
 TypeScript run directly by Node: no build step, no runtime dependencies, no lockfile. `tsconfig.json` sets `erasableSyntaxOnly`, so the syntax stays strippable — no `enum`, no `namespace`, no constructor parameter properties.
 
-**`tests/golden/` is the behaviour contract.** Each file pins what the pack produces for one fixture: stdout, stderr, exit code, and the resulting repository state. The suite builds a throwaway project with a real git remote, invokes the hooks and scripts the way mcs does — `bash .claude/hooks/<pack-id>/<file>` with the working directory at the project root — and compares. A diff therefore means the pack's behaviour changed, not that a test went stale.
+**`tests/golden/` is the behaviour contract.** Each file pins what the pack produces for one fixture: stdout, stderr, exit code, and the resulting repository state. The suite builds a throwaway project with a real git remote, installs the hooks the way mcs does and executes them through their shebang, and compares. A diff therefore means the pack's behaviour changed, not that a test went stale.
 
 Fixtures carry an `expect` pattern asserted against the recording, so a fixture where nothing happens fails rather than passing vacuously. Machine- and day-dependent values — temp paths, hostname, dates, git's relative timestamps — are normalised; everything else is byte-exact.
 
-CI runs on macOS across Node 22 and 24. Besides the typecheck and the suite it guards three things: shell exists only as the three hook shims, `hostname -s` still matches `os.hostname().split(".")[0]` (the commit subjects depend on it), and the suite leaves the working tree clean.
+CI runs on macOS across Node 22 and 24. Besides the typecheck and the suite it guards three things: the pack contains no shell at all, `hostname -s` still matches `os.hostname().split(".")[0]` (the commit subjects depend on it), and the suite leaves the working tree clean.
 
 ---
 

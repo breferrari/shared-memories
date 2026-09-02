@@ -9,9 +9,9 @@ const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 export type HookName = "pull" | "autopush" | "announce";
 
 const HOOK_FILE: Record<HookName, string> = {
-	pull: "memories_pull.sh",
-	autopush: "memories_autopush.sh",
-	announce: "memories_announce.sh",
+	pull: "pull.ts",
+	autopush: "autopush.ts",
+	announce: "announce.ts",
 };
 
 const EVENT: Record<HookName, string> = {
@@ -137,18 +137,19 @@ export function makeProject(): { root: string; work: string; project: string; re
 	return { root, work, project, repo, remote };
 }
 
+/** The layout mcs produces: the entry point, and the library beside it. */
 function install(project: string, hook: HookName): void {
 	const hooks = join(project, ".claude", "hooks", "shared-memories");
 	mkdirSync(hooks, { recursive: true });
-	rmSync(join(project, ".claude", "shared-memories"), { recursive: true, force: true });
-	cpSync(join(REPO, "hooks", HOOK_FILE[hook]), join(hooks, HOOK_FILE[hook]));
-	cpSync(join(REPO, "runtime"), join(project, ".claude", "shared-memories"), { recursive: true });
+	cpSync(join(REPO, "runtime", HOOK_FILE[hook]), join(hooks, HOOK_FILE[hook]));
+	chmodSync(join(hooks, HOOK_FILE[hook]), 0o755);
+	cpSync(join(REPO, "runtime", "lib"), join(hooks, "lib"), { recursive: true });
 }
 
-/** Invoked exactly as mcs registers it: `bash <relative path>`, cwd at the project root. */
+/** Executed directly, the way mcs runs a hook whose shebang selects the interpreter. */
 function invoke(project: string, hook: HookName, fx: Fixture): Omit<RunResult, "git"> {
 	const payload = fx.stdin ?? JSON.stringify({ hook_event_name: EVENT[hook], session_id: "s1", cwd: project });
-	const r = spawnSync("bash", [`.claude/hooks/shared-memories/${HOOK_FILE[hook]}`], {
+	const r = spawnSync(join(project, ".claude", "hooks", "shared-memories", HOOK_FILE[hook]), [], {
 		cwd: project,
 		input: payload,
 		encoding: "utf8",

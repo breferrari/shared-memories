@@ -2,7 +2,8 @@ name: ci
 
 # macOS only, deliberately: mcs is a Swift/Homebrew tool that installs on macOS,
 # so it is the only platform that can actually install this pack. The suite runs
-# the hook shims exactly as mcs does, through bash.
+# the hooks exactly as mcs does, by executing them and letting the shebang pick
+# the interpreter.
 on:
   push:
   pull_request:
@@ -50,18 +51,16 @@ jobs:
           echo "shell='$from_shell' node='$from_node'"
           [ "$from_shell" = "$from_node" ] || { echo "::error::hostname -s and os.hostname() disagree"; exit 1; }
 
-      # Shell is permitted only in the three hook shims, because mcs invokes hooks
-      # as `bash <path>`. Everything else is TypeScript.
+      # The pack contains no shell at all. Hooks and pack scripts are TypeScript
+      # executed through their shebang.
       - name: no shell crept back in
         run: |
-          stray=$(find runtime scripts tests -name '*.sh' 2>/dev/null || true)
+          stray=$(find . -name '*.sh' -not -path './node_modules/*' -not -path './.git/*' || true)
           if [ -n "$stray" ]; then
-            echo "::error::shell scripts are permitted only in hooks/, as shims"
+            echo "::error::this pack contains no shell scripts"
             echo "$stray"
             exit 1
           fi
-          count=$(ls hooks/*.sh | wc -l | tr -d ' ')
-          [ "$count" = "3" ] || { echo "::error::expected exactly 3 hook shims, found $count"; exit 1; }
 
       # A test that writes outside its temp dir is a bug wherever it lands.
       - name: the test run left the working tree clean

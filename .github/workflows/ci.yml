@@ -20,7 +20,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22', '24']
+        # 22.6 is the floor: `--experimental-strip-types` does not exist below it,
+        # and a bare '22' resolves to current 22.x, which cannot reach that range.
+        node: ['22.6.0', '22', '24']
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,10 +30,12 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: the tools the shims rely on are present
+      - name: node is new enough to strip types
         run: |
-          command -v git || { echo "::error::git is required"; exit 1; }
-          echo "bash ${BASH_VERSION}, node $(node --version)"
+          command -v git >/dev/null || { echo "::error::git is required"; exit 1; }
+          node --experimental-strip-types -e 'const [maj, min] = process.versions.node.split(".").map(Number);
+            if (maj < 22 || (maj === 22 && min < 6)) { console.error("::error::node " + process.versions.node + " cannot strip types"); process.exit(1); }
+            console.log("node " + process.versions.node + " strips types");'
 
       - name: install typecheck deps (CI-only, never shipped)
         run: npm install --no-save --silent typescript@5.9.2 @types/node@22.9.0
@@ -42,8 +46,8 @@ jobs:
       - name: unit, contract and behaviour tests
         run: npm test
 
-      # The port's premise: os.hostname() short-form equals `hostname -s`, so the
-      # commit subjects the pack writes are unchanged.
+      # A migration artifact: it pinned the premise that commit subjects were
+      # unchanged by the port. Cheap to keep, not load-bearing going forward.
       - name: the hostname equivalence holds on this runner
         run: |
           from_shell=$(hostname -s)

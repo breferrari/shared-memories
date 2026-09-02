@@ -21,6 +21,13 @@ describe("techpack manifest", () => {
 		assert.ok(sources.length >= 8, `expected the manifest to reference several files, found ${sources.length}`);
 	});
 
+	test("every hook declares the interpreter mcs runs it with", () => {
+		// `.mts` is in mcs's ambiguousExtensions, so without this it falls back to bash.
+		const declared = manifest.match(/hookInterpreter: node --experimental-strip-types/g) ?? [];
+		assert.equal(declared.length, 3, "each of the three hooks needs its own hookInterpreter");
+		assert.match(manifest, /minMCSVersion: "2026\.9\.3"/, "the interpreter field needs the release that honours it");
+	});
+
 	test("jq is gone and node is declared", () => {
 		assert.doesNotMatch(manifest, /brew: jq/, "the pack no longer shells out to jq");
 		assert.match(manifest, /brew: node/, "the pack now depends on Node");

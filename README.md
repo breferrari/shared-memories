@@ -6,7 +6,7 @@ Built for the [`mcs`](https://github.com/mcs-cli/mcs) configuration engine.
 
 ```
 identifier: shared-memories
-requires:   mcs >= 2026.4.12
+requires:   mcs >= 2026.9.3
 ```
 
 **Contents** — [When is this useful?](#-when-is-this-useful) · [The problem](#-the-problem) · [How it works](#-how-it-works) · [What's included](#-whats-included) · [Installation](#-installation) · [Directory structure](#-directory-structure) · [Migration](#-migration-from-an-existing-local-memories-folder) · [Side branches](#-optional-push-to-a-side-branch) · [Auto-push modes](#-auto-push-modes) · [Deletions](#-intentional-deletion-workflow) · [Troubleshooting](#-troubleshooting) · [Development](#-development)
@@ -142,7 +142,7 @@ Each is executed directly by mcs, with `#!/usr/bin/env -S node --experimental-st
 
 | Dep | Via |
 |-----|-----|
-| **Node.js 22+** | brew |
+| **Node.js 22.6+** | brew |
 
 Node runs the TypeScript directly — there is no build step, no `node_modules`, and no runtime dependencies.
 
@@ -153,7 +153,7 @@ Node runs the TypeScript directly — there is no build step, no `node_modules`,
 ### Prerequisites
 
 - macOS
-- Node.js 22 or newer
+- Node.js 22.6 or newer (where `--experimental-strip-types` landed)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 - [mcs](https://github.com/mcs-cli/mcs) CLI
 - [`mcs-cli/memory`](https://github.com/mcs-cli/memory) (companion capture pack — produces the `learning_*.md` / `decision_*.md` files this pack shares)

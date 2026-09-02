@@ -33,7 +33,11 @@ export function warn(line: string): void {
 	process.stderr.write(`${line}\n`);
 }
 
-/** The ERR-trap contract: nothing escapes, the hook always exits 0. */
+/**
+ * The ERR-trap contract: nothing escapes, the hook always exits 0.
+ * `exitCode` rather than `exit()`, which does not wait for an async pipe write
+ * and can truncate a long review report.
+ */
 export function failOpen(name: string, body: () => void): void {
 	try {
 		body();
@@ -41,7 +45,7 @@ export function failOpen(name: string, body: () => void): void {
 		const detail = e instanceof Error ? e.message : String(e);
 		process.stderr.write(`${name}: aborted — ${detail}\n`);
 	}
-	process.exit(0);
+	process.exitCode = 0;
 }
 
 const NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/;

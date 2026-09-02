@@ -1,6 +1,14 @@
 import { spawnSync } from "node:child_process";
 
-export type GitRun = { readonly ok: boolean; readonly stdout: string; readonly stderr: string; readonly code: number };
+export type GitRun = {
+	readonly ok: boolean;
+	readonly stdout: string;
+	readonly stderr: string;
+	/** The process's own exit status, or null when it never produced one. */
+	readonly exit: number | null;
+	/** Why there is no status: an errno if it never started, or the signal that killed it. */
+	readonly failure: string | null;
+};
 
 export type GitOpts = {
 	readonly env?: Readonly<Record<string, string>>;
@@ -14,7 +22,14 @@ export function git(cwd: string, args: readonly string[], opts: GitOpts = {}): G
 		stdio: ["ignore", "pipe", opts.inheritStderr === true ? "inherit" : "pipe"],
 		env: opts.env ? { ...process.env, ...opts.env } : process.env,
 	});
-	return { ok: r.status === 0, stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1 };
+	const errno = (r.error as NodeJS.ErrnoException | undefined)?.code;
+	return {
+		ok: r.status === 0,
+		stdout: r.stdout ?? "",
+		stderr: r.stderr ?? "",
+		exit: r.status ?? null,
+		failure: errno ?? r.signal ?? null,
+	};
 }
 
 /** stdout trimmed, or "" on any failure — the `$(... || true)` shape. */
@@ -43,6 +58,9 @@ export function unpushedCount(dir: string): number {
 	return Number.isNaN(n) ? 0 : n;
 }
 
+/** Whether the binary exists, the question `command -v git` asked. A git that ran and was
+ *  then killed is still installed. */
 export function gitPresent(): boolean {
-	return spawnSync("git", ["--version"], { stdio: "ignore" }).error === undefined;
+	const r = spawnSync("git", ["--version"], { stdio: "ignore" });
+	return (r.error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT";
 }

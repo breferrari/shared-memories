@@ -54,7 +54,7 @@ export function syncToRemote(repo: string, attemptsRaw: string | undefined): voi
 		const err = push.stderr.replace(/\n$/, "");
 
 		// Exit code, not message text: only 1 means the remote rejected the update.
-		if (push.code !== 1) {
+		if (push.exit !== 1) {
 			say("Shared memories: auto-push failed (not a rejected update — auth, network or repository). Will retry on next Stop.");
 			detail(err);
 			return;

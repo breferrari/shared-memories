@@ -109,7 +109,7 @@ function main(): void {
 		err("Cannot set up shared memories — remote is unreachable or branch missing.");
 		err(`  remote: ${repoUrl}`);
 		err(`  branch: ${branch}`);
-		err(`  error:  ${probe.stderr.replace(/\n$/, "")}`);
+		err(`  error:  ${probe.stderr.replace(/\n$/, "") || (probe.failure ?? "")}`);
 		err("");
 		err("Common causes:");
 		err("  - SSH key not loaded — try: ssh-add ~/.ssh/<your-key>");
@@ -162,7 +162,7 @@ function main(): void {
 		// the backup, and the script exits with git's own status.
 		if (!clone.ok) {
 			restoreBackup();
-			process.exit(clone.code);
+			process.exit(clone.exit ?? 1);
 		}
 		git(repoDir, ["sparse-checkout", "set", "memories"], { inheritStderr: true });
 		// A bootstrap branch has no memories/ tree, and the link would dangle.

@@ -17,7 +17,7 @@ const url = gitOut(repo, ["remote", "get-url", "origin"]) || "<unknown>";
 const lines = [
 	"Cannot reach the shared memories remote:",
 	`  remote: ${url}`,
-	`  error:  ${probe.stderr.replace(/\n$/, "")}`,
+	`  error:  ${probe.stderr.replace(/\n$/, "") || (probe.failure ?? "")}`,
 	"",
 	"Common causes:",
 	"  - SSH key not loaded — try: ssh-add ~/.ssh/<your-key>",

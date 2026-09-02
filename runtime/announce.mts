@@ -37,7 +37,8 @@ function filePaths(values: readonly unknown[]): string | null {
 		if (filePath === null || filePath === false) continue;
 		out.push(render(filePath));
 	}
-	return lastErrored ? null : out.join("\n");
+	// `$(...)` strips trailing newlines, and jq emits one per result.
+	return lastErrored ? null : out.join("\n").replace(/\n+$/, "");
 }
 
 failOpen("memories_announce", () => {

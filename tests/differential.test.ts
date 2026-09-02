@@ -10,19 +10,27 @@ import { git, memory, readGolden, rejectAllPushes, runHook, type Fixture, type R
  * this pack replaced and verified against it fixture by fixture before the bash
  * was removed. A drift here is a change in what the pack does, not a stale test.
  */
-function check(name: string, actual: RunResult, expect?: RegExp): void {
+const ABORT = /^\w+: aborted.*$/m;
+
+function check(name: string, actual: RunResult, expect?: RegExp, abortsDiffer = false): void {
 	const golden = readGolden(name);
 	assert.ok(golden, `no golden recorded for "${name}"`);
 	assert.equal(actual.stdout, golden.stdout, `stdout drifted from recorded behaviour for "${name}"`);
 	assert.equal(actual.code, golden.code, `exit code drifted for "${name}"`);
-	assert.equal(actual.stderr, golden.stderr, `stderr drifted from recorded behaviour for "${name}"`);
+	if (abortsDiffer) {
+		assert.match(golden.stderr, ABORT, `"${name}" claims an abort deviation the recording does not show`);
+		assert.match(actual.stderr, ABORT, `"${name}" should still report the abort`);
+		assert.equal(actual.stderr.replace(ABORT, ""), golden.stderr.replace(ABORT, ""), `stderr drifted outside the abort line for "${name}"`);
+	} else {
+		assert.equal(actual.stderr, golden.stderr, `stderr drifted from recorded behaviour for "${name}"`);
+	}
 	assert.equal(actual.git, golden.git, `resulting state drifted for "${name}"\ngolden:\n${golden.git}\n\nactual:\n${actual.git}`);
 	// A fixture where nothing happens passes vacuously, so pin what was recorded.
 	if (expect) assert.match(golden.stdout + golden.stderr, expect, `fixture "${name}" never exercised what it claims to`);
 }
 
 function assertParity(fx: Fixture): void {
-	check(fx.name, runHook(fx), fx.expect);
+	check(fx.name, runHook(fx), fx.expect, fx.abortsDiffer);
 }
 
 const announce: readonly Fixture[] = [
@@ -771,6 +779,31 @@ const edges: readonly Fixture[] = [
 		hook: "announce",
 		env: { MEMORIES_AUTOPUSH_MODE: "review" },
 		stdin: '{"tool_input":{"file_path":{"x":1}}} {"tool_input":{"file_path":"/p/.claude/memories/learning_a_b.md"}}',
+	},
+	{
+		name: "edge: announce strips a trailing newline the way $() did",
+		expect: /Memory file saved at \/p\/\.claude\/memories\/learning_a_b\.md \(MEMORIES/,
+		hook: "announce",
+		env: { MEMORIES_AUTOPUSH_MODE: "review" },
+		stdin: '{"tool_input":{"file_path":"/p/.claude/memories/learning_a_b.md\\n"}}',
+	},
+	{
+		name: "edge: an empty last result does not silence the nudge",
+		expect: /Memory file saved at \/p\/\.claude\/memories\/learning_a_b\.md \(MEMORIES/,
+		hook: "announce",
+		env: { MEMORIES_AUTOPUSH_MODE: "review" },
+		stdin: '{"tool_input":{"file_path":"/p/.claude/memories/learning_a_b.md"}} {"tool_input":{"file_path":""}}',
+	},
+	{
+		name: "edge: a locked index aborts the turn instead of reporting nothing",
+		abortsDiffer: true,
+		expect: /Unable to create .*index\.lock/,
+		hook: "autopush",
+		env: { MEMORIES_AUTOPUSH_MODE: "auto" },
+		setup: (repo) => {
+			memory(repo, "learning_new_thing.md", "A lesson.\n");
+			writeFileSync(join(repo, ".git", "index.lock"), "");
+		},
 	},
 	{
 		name: "edge: announce ignores a null file_path",

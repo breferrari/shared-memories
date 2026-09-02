@@ -77,6 +77,8 @@ export type Fixture = {
 	readonly betweenRuns?: (repo: string, project: string) => void;
 	/** Non-vacuity: the bash side must actually produce this, or the fixture proves nothing. */
 	readonly expect?: RegExp;
+	/** The abort diagnostic is a documented stderr-only deviation; compare the rest of stderr. */
+	readonly abortsDiffer?: boolean;
 };
 
 /**

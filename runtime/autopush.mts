@@ -13,6 +13,12 @@ import { syncToRemote } from "./lib/push.mts";
 
 const NAME = "memories_autopush";
 
+/** A failed stage must not read as "nothing to commit"; let git speak and abort the turn. */
+const stage = (repo: string, args: readonly string[]): void => {
+	const r = git(repo, args, { inheritStderr: true });
+	if (!r.ok) throw new Error(`git ${args.join(" ")} failed (exit ${r.exit ?? r.failure})`);
+};
+
 const today = (): string => {
 	const d = new Date();
 	const p = (n: number) => String(n).padStart(2, "0");
@@ -94,9 +100,9 @@ failOpen(NAME, () => {
 				say("  /approve-memories audit cleanup");
 			}
 			const stageable = [...new Set([...pending.addedModified, ...pending.untracked])].filter(Boolean).sort();
-			for (const f of stageable) git(repo, ["add", "--", f]);
+			for (const f of stageable) stage(repo, ["add", "--", f]);
 		} else {
-			git(repo, ["add", "-A", "--", "memories/"]);
+			stage(repo, ["add", "-A", "--", "memories/"]);
 		}
 
 		if (!git(repo, ["diff", "--cached", "--quiet", "--", "memories/"]).ok) {

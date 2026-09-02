@@ -3,9 +3,6 @@ identifier: shared-memories
 displayName: "Shared Memories"
 description: Team-shared Claude Code memories via a dedicated git repo
 author: Bruno Guidolim
-# NOTE: hooks here are TypeScript executed through their shebang, which needs the
-# mcs release that stopped prefixing hook commands with `bash`. Bump this to that
-# version before merging — on an older mcs the hooks are read as bash and fail.
 minMCSVersion: "2026.4.12"
 
 # Doctor-check scripts are wired via `supplementaryDoctorChecks.command`, which

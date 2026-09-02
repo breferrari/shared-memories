@@ -2,5 +2,5 @@
   "stdout": "Shared memories already linked — leaving as-is.\n",
   "stderr": "",
   "code": 0,
-  "git": "memories .memories-repo \nlearning_shared_seed.md"
+  "git": ".memories-repo memories\nlearning_shared_seed.md"
 }

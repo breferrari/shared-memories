@@ -81,6 +81,6 @@ const fixtures: readonly ScriptFixture[] = [
 	},
 ];
 
-describe("pack scripts — bash and TypeScript agree", () => {
+describe("pack scripts — behaviour is pinned", () => {
 	for (const fx of fixtures) test(fx.name, () => assertParity(fx));
 });

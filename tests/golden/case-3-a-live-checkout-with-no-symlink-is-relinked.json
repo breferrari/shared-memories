@@ -2,5 +2,5 @@
   "stdout": "Memories checkout present, (re)linking <TMP>/work/project/.claude/memories → .memories-repo/memories...\nDone. 1 memory file(s) available at <TMP>/work/project/.claude/memories.\n",
   "stderr": "",
   "code": 0,
-  "git": "memories .memories-repo \nlearning_shared_seed.md"
+  "git": ".memories-repo memories\nlearning_shared_seed.md"
 }

@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { hostname, tmpdir } from "node:os";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { hostname, tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,6 +30,7 @@ const slug = (name: string): string => name.replace(/[^a-z0-9]+/gi, "-").replace
  */
 export function normalizeRun(r: RunResult, root: string): RunResult {
 	const host = hostname().split(".")[0] ?? "";
+	const user = userInfo().username;
 	const scrub = (t: string): string =>
 		t
 			.split(root)
@@ -37,8 +38,11 @@ export function normalizeRun(r: RunResult, root: string): RunResult {
 			.replace(/\.memories-migration-\d{8}-\d{6}/g, ".memories-migration-<TS>")
 			.replace(/\(last modified [^)]*\)/g, "(last modified <REL>)")
 			.replace(/\d{4}-\d{2}-\d{2}/g, "<DATE>")
+			.replace(/(deleted by )[0-9a-f]{7,40}/g, "$1<SHA>")
 			.split(host)
-			.join("<HOST>");
+			.join("<HOST>")
+			.split(user)
+			.join("<USER>");
 	return { stdout: scrub(r.stdout), stderr: scrub(r.stderr), code: r.code, git: scrub(r.git) };
 }
 
@@ -88,13 +92,35 @@ export type Fixture = {
  */
 const FIXTURE_DATE = "2026-01-15T12:00:00+00:00";
 
+/** Nothing the suite compares may depend on the developer's git config.
+ *  Locale is deliberately not pinned: `LC_ALL=C` changes bash's own substring
+ *  semantics from characters to bytes, which would move the reference. */
+const HERMETIC = {
+	GIT_CONFIG_GLOBAL: "/dev/null",
+	GIT_CONFIG_SYSTEM: "/dev/null",
+	GIT_AUTHOR_NAME: "Fixture",
+	GIT_AUTHOR_EMAIL: "fixture@example.com",
+	GIT_COMMITTER_NAME: "Fixture",
+	GIT_COMMITTER_EMAIL: "fixture@example.com",
+	GIT_AUTHOR_DATE: FIXTURE_DATE,
+	GIT_COMMITTER_DATE: FIXTURE_DATE,
+} as const;
+
+const entries = (dir: string): string[] => {
+	try {
+		return readdirSync(dir).sort();
+	} catch {
+		return [];
+	}
+};
+
 export const git = (cwd: string, ...args: string[]): string => {
 	try {
 		return execFileSync("git", args, {
 			cwd,
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
-			env: { ...process.env, GIT_AUTHOR_DATE: FIXTURE_DATE, GIT_COMMITTER_DATE: FIXTURE_DATE },
+			env: { ...process.env, ...HERMETIC },
 		}).trim();
 	} catch {
 		return "";
@@ -116,7 +142,7 @@ export const memory = (repo: string, name: string, body = "A shared lesson.\n"):
 
 /** A bare remote plus a checkout with one committed memory, tracking origin. */
 export function makeProject(): { root: string; work: string; project: string; repo: string; remote: string } {
-	const root = mkdtempSync(join(tmpdir(), "sm-"));
+	const root = realpathSync(mkdtempSync(join(tmpdir(), "sm-")));
 	const work = join(root, "work");
 	mkdirSync(work, { recursive: true });
 	const remote = join(work, "remote.git");
@@ -158,7 +184,7 @@ function invoke(project: string, hook: HookName, fx: Fixture): Omit<RunResult, "
 		input: payload,
 		encoding: "utf8",
 		timeout: 180_000,
-		env: { ...process.env, ...fx.env },
+		env: { ...process.env, ...HERMETIC, ...fx.env },
 	});
 	return { stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1 };
 }
@@ -177,26 +203,14 @@ export function gitState(repo: string, project: string): string {
 		`unpushed: ${upstream ? git(repo, "rev-list", "@{u}..HEAD", "--count") : "0"}`,
 		`tracked: ${git(repo, "ls-files", "--", "memories/").split("\n").filter(Boolean).sort().join(" | ")}`,
 		`review-shown: ${existsSync(join(repo, ".review-shown")) ? "present" : "absent"}`,
-		`worktree: ${execFileSync("bash", ["-c", `ls -A "${repo}/memories" 2>/dev/null | sort | tr '\\n' ' '`], { encoding: "utf8" }).trim()}`,
+		`worktree: ${entries(join(repo, "memories")).join(" ")}`,
 	].join("\n");
 }
 
-/**
- * Both implementations run in the SAME directory, sequentially, restoring the
- * tree in between. Two parallel clones would differ in absolute path (which
- * reaches stdout through `file://` URLs) and in commit timestamps (which reach
- * it through `%cr`), so a diff between them could not distinguish a real
- * deviation from fixture noise.
- */
 export function runHook(fx: Fixture): RunResult {
-	const { root, work, project, repo } = makeProject();
+	const { root, project, repo } = makeProject();
 	try {
 		fx.setup?.(repo, project);
-		const pristine = join(root, "pristine");
-		cpSync(work, pristine, { recursive: true, verbatimSymlinks: true });
-		rmSync(work, { recursive: true, force: true });
-		cpSync(pristine, work, { recursive: true, verbatimSymlinks: true });
-
 		install(project, fx.hook);
 		fx.beforeEach?.(repo, project);
 		let last = invoke(project, fx.hook, fx);
@@ -231,7 +245,7 @@ export function runScript(fx: ScriptFixture): RunResult {
 		const r = spawnSync(join(REPO, "scripts", `${fx.script}.ts`), [], {
 			encoding: "utf8",
 			timeout: 180_000,
-			env: { ...process.env, MCS_PROJECT_PATH: project },
+			env: { ...process.env, ...HERMETIC, MCS_PROJECT_PATH: project },
 		});
 		return normalizeRun(
 			{ stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1, git: gitState(repo, project) },
@@ -270,7 +284,7 @@ export type ConfigureFixture = {
 
 /** The migration backup embeds a HH:MM:SS stamp, so the two runs cannot share it. */
 export function runConfigure(fx: ConfigureFixture): RunResult {
-	const root = mkdtempSync(join(tmpdir(), "sm-cfg-"));
+	const root = realpathSync(mkdtempSync(join(tmpdir(), "sm-cfg-")));
 	try {
 		const work = join(root, "work");
 		mkdirSync(work, { recursive: true });
@@ -303,17 +317,14 @@ export function runConfigure(fx: ConfigureFixture): RunResult {
 			timeout: 180_000,
 			env: {
 				...process.env,
+				...HERMETIC,
 				MCS_PROJECT_PATH: fx.trailingSlash === true ? `${project}/` : project,
 				MCS_RESOLVED_MEMORIES_REPO_URL: remote,
 				MCS_RESOLVED_MEMORIES_BRANCH: "main",
 				...fx.env,
 			},
 		});
-		const listing = execFileSync(
-			"bash",
-			["-c", `ls -A "${claude}" 2>/dev/null | sort | tr '\\n' ' '; echo; ls -A "${claude}/memories/" 2>/dev/null | sort | tr '\\n' ' '`],
-			{ encoding: "utf8" },
-		);
+		const listing = `${entries(claude).join(" ")}\n${entries(join(claude, "memories")).join(" ")}`;
 		return normalizeRun(
 			{ stdout: r.stdout ?? "", stderr: r.stderr ?? "", code: r.status ?? -1, git: listing.trim() },
 			root,

@@ -1,5 +1,5 @@
 {
-  "stdout": "Shared memories: commit failed; will retry on next Stop.\n  Author identity unknown\n\n*** Please tell me who you are.\n\nRun\n\n  git config --global user.email \"you@example.com\"\n  git config --global user.name \"Your Name\"\n\nto set your account's default identity.\nOmit --global to set the identity only in this repository.\n\nfatal: unable to auto-detect email address (got 'brenno@<HOST>.(none)')\n",
+  "stdout": "Shared memories: commit failed; will retry on next Stop.\n  fatal: empty ident name (for <fixture@example.com>) not allowed\n",
   "stderr": "",
   "code": 0,
   "git": "status-all: A  memories/learning_x_y.md\nlog-all: seed\ntracked-all: memories/learning_seed_topic.md | memories/learning_x_y.md\nstatus: A  memories/learning_x_y.md\nlog: seed\nupstream: origin/main\nunpushed: 0\ntracked: memories/learning_seed_topic.md | memories/learning_x_y.md\nreview-shown: absent\nworktree: learning_seed_topic.md learning_x_y.md"

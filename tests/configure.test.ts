@@ -80,7 +80,7 @@ const fixtures: readonly ConfigureFixture[] = [
 	{
 		name: "case 2: a previously deleted memory is held back",
 		expectCode: 0,
-		expect: /previously-deleted file\(s\) held back[\s\S]*deleted by [0-9a-f]+ remove it/,
+		expect: /previously-deleted file\(s\) held back[\s\S]*deleted by <SHA> remove it/,
 		seed: (clone) => {
 			writeFileSync(join(clone, "memories", "learning_curated_away.md"), "Was here.\n");
 			git(clone, "add", "-A");
@@ -152,7 +152,7 @@ const fixtures: readonly ConfigureFixture[] = [
 	},
 ];
 
-describe("configure-memories — bash and TypeScript agree", () => {
+describe("configure-memories — behaviour is pinned", () => {
 	for (const fx of fixtures) test(fx.name, () => assertParity(fx));
 });
 
@@ -243,7 +243,7 @@ const audited: readonly ConfigureFixture[] = [
 	},
 ];
 
-describe("audited configure edges — bash and TypeScript agree", () => {
+describe("audited configure edges — behaviour is pinned", () => {
 	const root = process.getuid?.() === 0;
 	for (const fx of audited) {
 		// A read-only directory does not stop root, so that fixture proves nothing there.
@@ -278,7 +278,7 @@ const unchecked: readonly ConfigureFixture[] = [
 	},
 ];
 
-describe("unchecked git results — bash and TypeScript agree", () => {
+describe("unchecked git results — behaviour is pinned", () => {
 	for (const fx of unchecked) test(fx.name, () => assertParity(fx));
 });
 

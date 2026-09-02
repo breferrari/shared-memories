@@ -126,7 +126,7 @@ const announce: readonly Fixture[] = [
 	},
 ];
 
-describe("announce — bash and TypeScript agree", () => {
+describe("announce — behaviour is pinned", () => {
 	for (const fx of announce) test(fx.name, () => assertParity(fx));
 });
 
@@ -238,7 +238,7 @@ const pull: readonly Fixture[] = [
 	},
 ];
 
-describe("pull — bash and TypeScript agree", () => {
+describe("pull — behaviour is pinned", () => {
 	for (const fx of pull) test(fx.name, () => assertParity(fx));
 });
 
@@ -366,7 +366,7 @@ const autopush: readonly Fixture[] = [
 	},
 ];
 
-describe("autopush — bash and TypeScript agree", () => {
+describe("autopush — behaviour is pinned", () => {
 	for (const fx of autopush) test(fx.name, () => assertParity(fx));
 });
 
@@ -504,7 +504,7 @@ const reviewChange: Fixture = {
 	betweenRuns: (repo) => memory(repo, "learning_second_one.md", "Another lesson.\n"),
 };
 
-describe("review mode — bash and TypeScript agree", () => {
+describe("review mode — behaviour is pinned", () => {
 	test(reviewChange.name, () => assertParity(reviewChange));
 	for (const fx of review) test(fx.name, () => assertParity(fx));
 });
@@ -575,7 +575,7 @@ const push: readonly Fixture[] = [
 	},
 ];
 
-describe("push loop — bash and TypeScript agree", () => {
+describe("push loop — behaviour is pinned", () => {
 	for (const fx of push) test(fx.name, () => assertParity(fx));
 });
 
@@ -601,7 +601,7 @@ const budgets: readonly Fixture[] = [
 	budgetFixture("budget: unset falls back to twelve", undefined, /auto-push failed after 12 attempt\(s\)/),
 ];
 
-describe("retry budget — bash and TypeScript agree", () => {
+describe("retry budget — behaviour is pinned", () => {
 	for (const fx of budgets) test(fx.name, () => assertParity(fx));
 });
 
@@ -635,7 +635,7 @@ const audit: readonly Fixture[] = [
 	},
 ];
 
-describe("audit findings — bash and TypeScript agree", () => {
+describe("audit findings — behaviour is pinned", () => {
 	for (const fx of audit) test(fx.name, () => assertParity(fx));
 });
 
@@ -691,7 +691,7 @@ const pathspec: readonly Fixture[] = [
 	},
 ];
 
-describe("pathspec scoping — bash and TypeScript agree", () => {
+describe("pathspec scoping — behaviour is pinned", () => {
 	for (const fx of pathspec) test(fx.name, () => assertParity(fx));
 });
 
@@ -745,7 +745,7 @@ const incoming: readonly Fixture[] = [
 	},
 ];
 
-describe("incoming memories — bash and TypeScript agree", () => {
+describe("incoming memories — behaviour is pinned", () => {
 	for (const fx of incoming) test(fx.name, () => assertParity(fx));
 });
 
@@ -919,6 +919,6 @@ const edges: readonly Fixture[] = [
 	},
 ];
 
-describe("audited edges — bash and TypeScript agree", () => {
+describe("audited edges — behaviour is pinned", () => {
 	for (const fx of edges) test(fx.name, () => assertParity(fx));
 });

@@ -204,6 +204,8 @@ export function gitState(repo: string, project: string): string {
 		`tracked: ${git(repo, "ls-files", "--", "memories/").split("\n").filter(Boolean).sort().join(" | ")}`,
 		`review-shown: ${existsSync(join(repo, ".review-shown")) ? "present" : "absent"}`,
 		`worktree: ${entries(join(repo, "memories")).join(" ")}`,
+		`remote-log: ${git(repo, "log", "--format=%s", "origin/main").split("\n").filter(Boolean).join(" | ")}`,
+		`remote-files: ${git(repo, "ls-tree", "-r", "--name-only", "origin/main").split("\n").filter(Boolean).sort().join(" | ")}`,
 	].join("\n");
 }
 

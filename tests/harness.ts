@@ -9,9 +9,9 @@ const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 export type HookName = "pull" | "autopush" | "announce";
 
 const HOOK_FILE: Record<HookName, string> = {
-	pull: "pull.ts",
-	autopush: "autopush.ts",
-	announce: "announce.ts",
+	pull: "pull.mts",
+	autopush: "autopush.mts",
+	announce: "announce.mts",
 };
 
 const EVENT: Record<HookName, string> = {
@@ -132,6 +132,10 @@ export function makeProject(): { root: string; work: string; project: string; re
 	git(repo, "commit", "-qm", "seed");
 	git(repo, "push", "-q", "-u", "origin", "main");
 
+	// A consumer package.json is the ancestor Node walks to when deciding module
+	// type. "commonjs" is the hostile case: it is what would break an installed
+	// hook that relied on inheriting ESM, so every fixture runs under it.
+	writeFileSync(join(project, "package.json"), '{"name":"consumer","type":"commonjs"}\n');
 	mkdirSync(join(project, ".claude", "hooks", "shared-memories"), { recursive: true });
 	execFileSync("ln", ["-sfn", ".memories-repo/memories", join(project, ".claude", "memories")]);
 	return { root, work, project, repo, remote };

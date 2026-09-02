@@ -2,14 +2,14 @@
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { git, gitPresent, isWorkTree, unpushedCount } from "./lib/git.ts";
-import { failOpen, isJsonStream, readStdin, say, warn } from "./lib/hook-io.ts";
-import { resolveMode } from "./lib/mode.ts";
-import { badNames, collect, headSha, uncommittedCount } from "./lib/pending.ts";
-import { memoriesRepo, projectRoot } from "./lib/paths.ts";
-import { RENAME_HINT } from "./lib/naming.ts";
-import { canonicalState, hashState, renderReport } from "./lib/report.ts";
-import { syncToRemote } from "./lib/push.ts";
+import { git, gitPresent, isWorkTree, unpushedCount } from "./lib/git.mts";
+import { failOpen, isJsonStream, readStdin, say, warn } from "./lib/hook-io.mts";
+import { resolveMode } from "./lib/mode.mts";
+import { badNames, collect, headSha, uncommittedCount } from "./lib/pending.mts";
+import { memoriesRepo, projectRoot } from "./lib/paths.mts";
+import { RENAME_HINT } from "./lib/naming.mts";
+import { canonicalState, hashState, renderReport } from "./lib/report.mts";
+import { syncToRemote } from "./lib/push.mts";
 
 const NAME = "memories_autopush";
 

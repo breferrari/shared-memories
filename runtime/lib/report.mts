@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { gitOut } from "./git.ts";
-import type { Pending } from "./pending.ts";
+import { gitOut } from "./git.mts";
+import type { Pending } from "./pending.mts";
 
 /** Only these three break terminal autolinking of file:// URLs; the bash leaves the rest. */
 export function urlEncodePath(p: string): string {

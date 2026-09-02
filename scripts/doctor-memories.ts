@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
 import { existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
-import { isWorkTree } from "../runtime/lib/git.ts";
+import { isWorkTree } from "../runtime/lib/git.mts";
 
 // mcs shellScript doctor contract: 0 pass, 1 fail, 2 warn, 3 skip.
 const project = process.env["MCS_PROJECT_PATH"] || process.cwd();

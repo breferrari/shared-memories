@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ALLOWED_PATTERN } from "../runtime/lib/naming.ts";
+import { ALLOWED_PATTERN } from "../runtime/lib/naming.mts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const manifest = readFileSync(join(REPO, "techpack.yaml"), "utf8");
@@ -41,7 +41,7 @@ describe("techpack manifest", () => {
 });
 
 describe("hook install contract", () => {
-	const dests = [...manifest.matchAll(/destination:\s*(\S+\.ts)/g)].map((m) => m[1] as string);
+	const dests = [...manifest.matchAll(/destination:\s*(\S+\.mts)/g)].map((m) => m[1] as string);
 
 	test("three hooks are registered, all TypeScript", () => {
 		assert.equal(dests.length, 3, "expected three registered hook entry points");
@@ -99,7 +99,7 @@ describe("the naming rule has one definition", () => {
 
 	test("no stale keep-in-sync comments survive in the TypeScript", () => {
 		for (const dir of ["runtime", "runtime/lib", "scripts"]) {
-			for (const f of readdirSync(join(REPO, dir)).filter((n) => n.endsWith(".ts"))) {
+			for (const f of readdirSync(join(REPO, dir)).filter((n) => n.endsWith(".ts") || n.endsWith(".mts"))) {
 				const body = readFileSync(join(REPO, dir, f), "utf8");
 				assert.doesNotMatch(body, /keep in sync/i, `${dir}/${f} still points at a second copy`);
 			}

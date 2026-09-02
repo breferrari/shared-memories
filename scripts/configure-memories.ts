@@ -2,8 +2,8 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, symlinkSync, unlinkSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { git, gitLines, gitOut, gitPresent, isWorkTree } from "../runtime/lib/git.ts";
-import { ALLOWED_PATTERN } from "../runtime/lib/naming.ts";
+import { git, gitLines, gitOut, gitPresent, isWorkTree } from "../runtime/lib/git.mts";
+import { ALLOWED_PATTERN } from "../runtime/lib/naming.mts";
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
 const err = (line: string) => process.stderr.write(`${line}\n`);

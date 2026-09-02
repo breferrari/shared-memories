@@ -1,5 +1,5 @@
-import { git } from "./git.ts";
-import { say } from "./hook-io.ts";
+import { git } from "./git.mts";
+import { say } from "./hook-io.mts";
 
 export function pushAttempts(raw: string | undefined): number {
 	if (raw === undefined || raw === "") return 12;

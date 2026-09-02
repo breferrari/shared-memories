@@ -1,11 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isJsonStream } from "../runtime/lib/hook-io.ts";
-import { resolveMode } from "../runtime/lib/mode.ts";
-import { ALLOWED_PATTERN, MEMORY_WRITE_PATTERN } from "../runtime/lib/naming.ts";
-import { jitterMs, pushAttempts } from "../runtime/lib/push.ts";
-import { canonicalState, describe as describePending, hashState, urlEncodePath } from "../runtime/lib/report.ts";
-import type { Pending } from "../runtime/lib/pending.ts";
+import { isJsonStream } from "../runtime/lib/hook-io.mts";
+import { resolveMode } from "../runtime/lib/mode.mts";
+import { ALLOWED_PATTERN, MEMORY_WRITE_PATTERN } from "../runtime/lib/naming.mts";
+import { jitterMs, pushAttempts } from "../runtime/lib/push.mts";
+import { canonicalState, describe as describePending, hashState, urlEncodePath } from "../runtime/lib/report.mts";
+import type { Pending } from "../runtime/lib/pending.mts";
 
 describe("mode resolution", () => {
 	for (const [raw, mode] of [[undefined, "auto"], ["", "auto"], ["auto", "auto"], ["full", "full"], ["review", "review"]] as const) {

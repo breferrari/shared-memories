@@ -1,5 +1,5 @@
-import { gitLines, gitOut, unpushedCount } from "./git.ts";
-import { ALLOWED_PATTERN } from "./naming.ts";
+import { gitLines, gitOut, unpushedCount } from "./git.mts";
+import { ALLOWED_PATTERN } from "./naming.mts";
 
 export type NumStat = { readonly added: string; readonly deleted: string; readonly path: string };
 

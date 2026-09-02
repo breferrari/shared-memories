@@ -51,7 +51,7 @@ components:
   # the pack checkout and once installed.
   - id: runtime
     displayName: Shared memories runtime
-    description: The library the hooks import. Installed beside them, in .claude/hooks/shared-memories/lib/.
+    description: The library the hooks import. Installed beside them, in .claude/hooks/shared-memories/lib/. `.mts` so module type never depends on the consumer's package.json.
     isRequired: true
     dependencies: [node]
     type: configuration
@@ -69,8 +69,8 @@ components:
     hookEvent: SessionStart
     hookTimeout: 15
     hook:
-      source: runtime/pull.ts
-      destination: pull.ts
+      source: runtime/pull.mts
+      destination: pull.mts
 
   - id: hook-memories-autopush
     displayName: Sync shared memories
@@ -80,8 +80,8 @@ components:
     hookTimeout: 30
     hookAsync: true
     hook:
-      source: runtime/autopush.ts
-      destination: autopush.ts
+      source: runtime/autopush.mts
+      destination: autopush.mts
 
   # ── Commands ──────────────────────────────────────────────
   - id: command-approve-memories
@@ -99,8 +99,8 @@ components:
     hookMatcher: Write|Edit|MultiEdit
     hookTimeout: 5
     hook:
-      source: runtime/announce.ts
-      destination: announce.ts
+      source: runtime/announce.mts
+      destination: announce.mts
 
   # ── Configuration ─────────────────────────────────────────
   - id: settings

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
-import { additionalContext, failOpen, readStdin, streamValues } from "./lib/hook-io.ts";
-import { MEMORY_WRITE_PATTERN } from "./lib/naming.ts";
+import { additionalContext, failOpen, readStdin, streamValues } from "./lib/hook-io.mts";
+import { MEMORY_WRITE_PATTERN } from "./lib/naming.mts";
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v);

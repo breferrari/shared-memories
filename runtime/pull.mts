@@ -1,10 +1,10 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { additionalContext, failOpen, isJsonStream, readStdin, warn } from "./lib/hook-io.ts";
-import { gitLines, gitPresent, isWorkTree, unpushedCount, git } from "./lib/git.ts";
-import { resolveMode } from "./lib/mode.ts";
-import { memoriesRepo, projectRoot } from "./lib/paths.ts";
+import { additionalContext, failOpen, isJsonStream, readStdin, warn } from "./lib/hook-io.mts";
+import { gitLines, gitPresent, isWorkTree, unpushedCount, git } from "./lib/git.mts";
+import { resolveMode } from "./lib/mode.mts";
+import { memoriesRepo, projectRoot } from "./lib/paths.mts";
 
 const NAME = "memories_pull";
 

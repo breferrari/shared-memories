@@ -92,10 +92,18 @@ export type Fixture = {
  */
 const FIXTURE_DATE = "2026-01-15T12:00:00+00:00";
 
-/** Nothing the suite compares may depend on the developer's git config.
- *  Locale is deliberately not pinned: `LC_ALL=C` changes bash's own substring
- *  semantics from characters to bytes, which would move the reference. */
+/**
+ * Nothing the suite compares may depend on the developer's environment.
+ *
+ * `LC_ALL` was deliberately left unpinned while the bash was still the reference:
+ * `LC_ALL=C` switches `${var:0:80}` from characters to bytes, so pinning it would
+ * have moved the reference rather than steadied it, and the truncation fixtures
+ * said so immediately. The bash is gone and the goldens are recordings now, so
+ * all the locale still reaches is git's own prose and collation -- and five
+ * goldens quote git's English verbatim, which a translated git breaks.
+ */
 const HERMETIC = {
+	LC_ALL: "C",
 	GIT_CONFIG_GLOBAL: "/dev/null",
 	GIT_CONFIG_SYSTEM: "/dev/null",
 	GIT_AUTHOR_NAME: "Fixture",
@@ -119,6 +127,7 @@ export const git = (cwd: string, ...args: string[]): string => {
 		return execFileSync("git", args, {
 			cwd,
 			encoding: "utf8",
+			maxBuffer: Infinity,
 			stdio: ["ignore", "pipe", "pipe"],
 			env: { ...process.env, ...HERMETIC },
 		}).trim();
@@ -183,6 +192,7 @@ function invoke(project: string, hook: HookName, fx: Fixture): Omit<RunResult, "
 		cwd: project,
 		input: payload,
 		encoding: "utf8",
+		maxBuffer: Infinity,
 		timeout: 180_000,
 		env: { ...process.env, ...HERMETIC, ...fx.env },
 	});
@@ -246,6 +256,7 @@ export function runScript(fx: ScriptFixture): RunResult {
 		fx.setup?.(repo, project);
 		const r = spawnSync(join(REPO, "scripts", `${fx.script}.ts`), [], {
 			encoding: "utf8",
+			maxBuffer: Infinity,
 			timeout: 180_000,
 			env: { ...process.env, ...HERMETIC, MCS_PROJECT_PATH: project },
 		});

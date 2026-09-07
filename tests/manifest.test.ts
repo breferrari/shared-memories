@@ -61,7 +61,7 @@ describe("hook install contract", () => {
 		assert.deepEqual(stray, [], `shell scripts are not permitted: ${stray.join(", ")}`);
 	});
 
-	test("every entry point carries the shebang mcs executes it by", () => {
+	test("every entry point carries a shebang matching its declared interpreter", () => {
 		for (const d of dests) {
 			const first = readFileSync(join(REPO, "runtime", d), "utf8").split("\n")[0];
 			assert.equal(

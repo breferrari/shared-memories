@@ -107,9 +107,9 @@ flowchart TD
 
 | Hook | Event | What It Does |
 |------|-------|-------------|
-| **pull.ts** | `SessionStart` | Fast-forwards the shared memories checkout; emits a mode-aware warning if previous state is stuck (or, in `review` mode, summarises pending review) |
-| **autopush.ts** | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
-| **announce.ts** | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
+| **pull.mts** | `SessionStart` | Fast-forwards the shared memories checkout; emits a mode-aware warning if previous state is stuck (or, in `review` mode, summarises pending review) |
+| **autopush.mts** | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
+| **announce.mts** | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
 
 Each is executed directly by mcs, with `#!/usr/bin/env -S node --experimental-strip-types` selecting the interpreter. They install to `.claude/hooks/shared-memories/`, with the library they import beside them in `lib/`.
 
@@ -206,9 +206,9 @@ shared-memories/
 ├── config/
 │   └── settings.json                # Templated env block — ships MEMORIES_AUTOPUSH_MODE
 ├── runtime/                         # Installed to .claude/hooks/shared-memories/
-│   ├── pull.ts                      # SessionStart: pull + stuck-state warning
-│   ├── autopush.ts                  # Stop: auto-commit + push (async)
-│   ├── announce.ts                  # PostToolUse: review-mode nudge to Claude (sync)
+│   ├── pull.mts                      # SessionStart: pull + stuck-state warning
+│   ├── autopush.mts                  # Stop: auto-commit + push (async)
+│   ├── announce.mts                  # PostToolUse: review-mode nudge to Claude (sync)
 │   └── lib/                         # git, paths, naming, mode, pending, report, push
 ├── scripts/                         # Run in place from the pack checkout
 │   ├── configure-memories.ts        # Sparse clone + symlink + migration
@@ -218,7 +218,7 @@ shared-memories/
 │   └── golden/                      # Behaviour recordings the suite checks against
 ├── templates/
 │   └── instructions.md              # CLAUDE.local.md section — what this dir is
-├── .github/workflows/ci.yml         # macOS × Node 22/24
+├── .github/workflows/ci.yml         # macOS × Node 22.6/22/24
 ├── package.json                     # No dependencies; test + typecheck scripts
 └── tsconfig.json                    # Strict, erasable-syntax-only, no emit
 ```
@@ -227,10 +227,10 @@ On engineer disks, the pack materializes as:
 
 ```
 <project>/.claude/
-├── hooks/shared-memories/           # executed by mcs; the shebang picks the interpreter
-│   ├── pull.ts
-│   ├── autopush.ts
-│   ├── announce.ts
+├── hooks/shared-memories/           # run by mcs via each hook's declared hookInterpreter
+│   ├── pull.mts
+│   ├── autopush.mts
+│   ├── announce.mts
 │   └── lib/                         # imported as ./lib/… by the entries beside it
 ├── .memories-repo/                  # sparse clone of MEMORIES_BRANCH
 │   ├── README.md, LICENSE, etc.     # any root-level files your repo ships
@@ -350,7 +350,7 @@ Discard local changes: …
 
 The same pending set is reported once per session — repeated turns within the session stay silent so the report doesn't spam every prompt. SessionStart resets the dedupe so unresolved changes re-surface in the next session instead of being buried forever.
 
-In `review` mode, Claude is also told about each memory write through a separate PostToolUse hook (`announce.ts`), so it can proactively mention pending review in the same turn and invoke `/approve-memories` when you confirm — without needing to wait for the terminal report. The terminal report and the in-conversation nudge are independent channels: the report goes to your terminal, the nudge goes to Claude's context. `auto` and `full` modes keep both channels silent.
+In `review` mode, Claude is also told about each memory write through a separate PostToolUse hook (`announce.mts`), so it can proactively mention pending review in the same turn and invoke `/approve-memories` when you confirm — without needing to wait for the terminal report. The terminal report and the in-conversation nudge are independent channels: the report goes to your terminal, the nudge goes to Claude's context. `auto` and `full` modes keep both channels silent.
 
 Pull is always automatic regardless of mode — incoming team memories arrive at session start.
 

@@ -185,7 +185,8 @@ function install(project: string, hook: HookName): void {
 	cpSync(join(REPO, "runtime", "lib"), join(hooks, "lib"), { recursive: true });
 }
 
-/** Executed directly, the way mcs runs a hook whose shebang selects the interpreter. */
+/** Executed directly. mcs prefixes the declared `hookInterpreter` instead, which
+ *  manifest.test.ts pins to the same command as the shebang, so the two agree. */
 function invoke(project: string, hook: HookName, fx: Fixture): Omit<RunResult, "git"> {
 	const payload = fx.stdin ?? JSON.stringify({ hook_event_name: EVENT[hook], session_id: "s1", cwd: project });
 	const r = spawnSync(join(project, ".claude", "hooks", "shared-memories", HOOK_FILE[hook]), [], {
@@ -247,8 +248,8 @@ export type ScriptFixture = {
 
 /**
  * Pack scripts are executed by mcs directly (ScriptRunner passes no arguments and
- * chmods first), so the shebang is what selects the interpreter — unlike hooks,
- * which mcs always runs through bash.
+ * chmods first), so here the shebang really is what selects the interpreter —
+ * unlike hooks, which mcs runs through their declared `hookInterpreter`.
  */
 export function runScript(fx: ScriptFixture): RunResult {
 	const { root, project, repo } = makeProject();

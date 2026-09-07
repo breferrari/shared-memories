@@ -25,6 +25,21 @@ export function preview(repo: string, file: string): string {
 	return Array.from(first.replace(CONTROL, "")).slice(0, 80).join("");
 }
 
+/**
+ * The hash the last review printed, or "" when it cannot be read.
+ * The bash was `tr -d '[:space:]' < "$f" 2>/dev/null || true`, so an unreadable
+ * state file meant no dedupe rather than no report. Reading it is racy besides:
+ * a concurrent session's Stop hook can remove it between the check and the read,
+ * and losing the whole report to that is the one outcome this pack avoids.
+ */
+export function lastShownHash(stateFile: string): string {
+	try {
+		return readFileSync(stateFile, "utf8").replace(/\s/g, "");
+	} catch {
+		return "";
+	}
+}
+
 export function canonicalState(p: Pending, headSha: string): string {
 	const lines = [
 		...p.untracked.filter(Boolean).map((f) => `NEW\t${f}`),

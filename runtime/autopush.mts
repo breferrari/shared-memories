@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --experimental-strip-types --disable-warning=ExperimentalWarning
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { git, gitPresent, isWorkTree, unpushedCount } from "./lib/git.mts";
@@ -8,7 +8,7 @@ import { resolveMode } from "./lib/mode.mts";
 import { badNames, collect, headSha, modifiedPaths, uncommittedCount } from "./lib/pending.mts";
 import { memoriesRepo, projectRoot } from "./lib/paths.mts";
 import { RENAME_HINT } from "./lib/naming.mts";
-import { canonicalState, hashState, renderReport } from "./lib/report.mts";
+import { canonicalState, hashState, lastShownHash, renderReport } from "./lib/report.mts";
 import { syncToRemote } from "./lib/push.mts";
 
 const NAME = "memories_autopush";
@@ -76,10 +76,7 @@ failOpen(NAME, () => {
 		}
 
 		const hash = hashState(state);
-		if (existsSync(reviewState)) {
-			const last = readFileSync(reviewState, "utf8").replace(/\s/g, "");
-			if (last === hash) return;
-		}
+		if (lastShownHash(reviewState) === hash) return;
 
 		for (const line of renderReport(repo, pending)) say(line);
 

@@ -1,10 +1,13 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { isJsonStream } from "../runtime/lib/hook-io.mts";
 import { resolveMode } from "../runtime/lib/mode.mts";
 import { ALLOWED_PATTERN, MEMORY_WRITE_PATTERN } from "../runtime/lib/naming.mts";
 import { jitterMs, pushAttempts } from "../runtime/lib/push.mts";
-import { canonicalState, describe as describePending, hashState, urlEncodePath } from "../runtime/lib/report.mts";
+import { canonicalState, describe as describePending, hashState, lastShownHash, urlEncodePath } from "../runtime/lib/report.mts";
 import type { Pending } from "../runtime/lib/pending.mts";
 
 describe("mode resolution", () => {
@@ -112,4 +115,27 @@ describe("the jq stdin gate", () => {
 	for (const s of ["not json", "{", "}", "[1,", '{"a":1} x', '"unterminated']) {
 		test(`rejects ${JSON.stringify(s)}`, () => assert.ok(!isJsonStream(s)));
 	}
+});
+
+describe("the review dedupe state fails open", () => {
+	test("an unreadable state file means no dedupe rather than a lost report", () => {
+		const dir = mkdtempSync(join(tmpdir(), "sm-dedupe-"));
+		try {
+			// A directory where the file belongs: readFileSync throws EISDIR, which used
+			// to escape into failOpen and swallow the entire review report. The bash read
+			// it as `tr ... 2>/dev/null || true` and simply printed.
+			const asDir = join(dir, "state-is-a-directory");
+			mkdirSync(asDir);
+			assert.equal(lastShownHash(asDir), "");
+
+			// The racy case: a concurrent Stop hook removed it after the existsSync.
+			assert.equal(lastShownHash(join(dir, "never-existed")), "");
+
+			// And it still reads a real one, `tr -d '[:space:]'` and all.
+			writeFileSync(join(dir, "shown"), "  deadbeef\n");
+			assert.equal(lastShownHash(join(dir, "shown")), "deadbeef");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });

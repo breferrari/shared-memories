@@ -39,11 +39,21 @@ export function warn(line: string): void {
  * and can truncate a long review report.
  */
 export function failOpen(name: string, body: () => void): void {
+	// A reader that goes away is not the hook's failure. Node raises EPIPE as an
+	// asynchronous `error` event on the stream rather than at the write, so the
+	// catch below cannot see it, and the default handler prints a stack trace and
+	// exits non-zero — precisely what this contract rules out.
+	process.stdout.on("error", () => {});
+	process.stderr.on("error", () => {});
 	try {
 		body();
 	} catch (e) {
 		const detail = e instanceof Error ? e.message : String(e);
-		process.stderr.write(`${name}: aborted — ${detail}\n`);
+		try {
+			process.stderr.write(`${name}: aborted — ${detail}\n`);
+		} catch {
+			// Nowhere left to report to; exiting 0 still holds.
+		}
 	}
 	process.exitCode = 0;
 }

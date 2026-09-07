@@ -19,6 +19,10 @@ export type GitOpts = {
 export function git(cwd: string, args: readonly string[], opts: GitOpts = {}): GitRun {
 	const r = spawnSync("git", ["-C", cwd, ...args], {
 		encoding: "utf8",
+		// `$(git ...)` was bounded only by memory. spawnSync defaults to 1MB, then
+		// kills git with ENOBUFS, which `gitOut` turns into "" — a large enough
+		// `status --porcelain` would read as "nothing pending".
+		maxBuffer: Infinity,
 		stdio: ["ignore", "pipe", opts.inheritStderr === true ? "inherit" : "pipe"],
 		env: opts.env ? { ...process.env, ...opts.env } : process.env,
 	});

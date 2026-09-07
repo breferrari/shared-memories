@@ -812,8 +812,10 @@ const edges: readonly Fixture[] = [
 		stdin: '{"tool_input":{"file_path":null}}',
 	},
 	{
-		// jq fails on the whole stream, so the later valid path is never announced.
-		name: "edge: announce is silent when a scalar precedes a valid path",
+		// jq neither aborts on an erroring value nor reports it once a later value
+		// succeeds, so the leading 42 is skipped and the path IS announced. The
+		// mirror-image fixture below is the silent one.
+		name: "edge: announce still reports a path after a leading scalar",
 		hook: "announce",
 		env: { MEMORIES_AUTOPUSH_MODE: "review" },
 		stdin: '42 {"tool_input":{"file_path":"/p/.claude/memories/learning_a_b.md"}}',
@@ -921,4 +923,30 @@ const edges: readonly Fixture[] = [
 
 describe("audited edges — behaviour is pinned", () => {
 	for (const fx of edges) test(fx.name, () => assertParity(fx));
+});
+
+/**
+ * Asserted directly rather than pinned to a golden. Every golden in this
+ * directory is a recording of the bash, and the bash is gone, so there is
+ * nothing left to record this against -- a hand-written file here would claim
+ * to be a recording it is not.
+ */
+describe("push failures are classified by exit code, not message text", () => {
+	test("a broken pushurl reaches the non-rejection branch", () => {
+		const r = runHook({
+			name: "internal: a broken pushurl is not a rejected update",
+			hook: "autopush",
+			env: { MEMORIES_AUTOPUSH_MODE: "full" },
+			setup: (repo) => {
+				// A valid fetch url with a broken pushurl: `pull --rebase` one line
+				// earlier still exits 0, so the loop reaches the push, and the push
+				// exits 128 rather than the 1 that means the remote rejected it.
+				git(repo, "config", "remote.origin.pushurl", "/nonexistent/remote.git");
+				memory(repo, "learning_new_thing.md", "A lesson.\n");
+			},
+		});
+		assert.match(r.stdout, /auto-push failed \(not a rejected update/);
+		assert.doesNotMatch(r.stdout, /after \d+ attempt/, "a non-rejection must not spend the retry budget");
+		assert.equal(r.code, 0);
+	});
 });

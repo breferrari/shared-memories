@@ -1,6 +1,5 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -89,10 +88,14 @@ describe("hook install contract", () => {
 		}
 	});
 
-	test("every entry point parses under type stripping", () => {
-		for (const d of dests) {
-			execFileSync(process.execPath, ["--experimental-strip-types", "--check", join(REPO, "runtime", d)]);
-		}
+	test("every entry point is under the typecheck", () => {
+		// This was `node --check`, which is parse-only and, on the declared 22.6.0
+		// floor, does not apply the `.mts`-implies-ESM mapping: it read every entry
+		// point as CommonJS and died on the first import. `tsc` subsumes it, but only
+		// if `include` reaches these files -- a pattern ending in `.ts` matches no
+		// `.mts`, which left all three plus lib/paths.mts unchecked entirely.
+		const include = JSON.parse(readFileSync(join(REPO, "tsconfig.json"), "utf8")).include as string[];
+		assert.ok(include.includes("runtime/**/*.mts"), "tsconfig include does not reach the .mts entry points");
 	});
 });
 

@@ -111,7 +111,7 @@ flowchart TD
 | **autopush.mts** | `Stop` (async) | Dispatches by `MEMORIES_AUTOPUSH_MODE` mode (`auto` / `full` / `review`); filename guardrail applies in every mode |
 | **announce.mts** | `PostToolUse` (Write/Edit/MultiEdit) | In `review` mode only, surfaces the just-written memory to Claude's context so it mentions pending review in chat. Silent in `auto` and `full` |
 
-Each is executed directly by mcs, with `#!/usr/bin/env -S node --experimental-strip-types` selecting the interpreter. They install to `.claude/hooks/shared-memories/`, with the library they import beside them in `lib/`.
+Each runs as `node --experimental-strip-types --disable-warning=ExperimentalWarning <path>`: mcs prefixes the interpreter the hook declares in `hookInterpreter`, and never looks at the shebang. They install to `.claude/hooks/shared-memories/`, with the library they import beside them in `lib/`.
 
 ### Slash Commands
 
@@ -206,9 +206,9 @@ shared-memories/
 ├── config/
 │   └── settings.json                # Templated env block — ships MEMORIES_AUTOPUSH_MODE
 ├── runtime/                         # Installed to .claude/hooks/shared-memories/
-│   ├── pull.mts                      # SessionStart: pull + stuck-state warning
-│   ├── autopush.mts                  # Stop: auto-commit + push (async)
-│   ├── announce.mts                  # PostToolUse: review-mode nudge to Claude (sync)
+│   ├── pull.mts                     # SessionStart: pull + stuck-state warning
+│   ├── autopush.mts                 # Stop: auto-commit + push (async)
+│   ├── announce.mts                 # PostToolUse: review-mode nudge to Claude (sync)
 │   └── lib/                         # git, paths, naming, mode, pending, report, push
 ├── scripts/                         # Run in place from the pack checkout
 │   ├── configure-memories.ts        # Sparse clone + symlink + migration
@@ -404,7 +404,7 @@ npm run typecheck                                    # tsc --noEmit (deps instal
 
 TypeScript run directly by Node: no build step, no runtime dependencies, no lockfile. `tsconfig.json` sets `erasableSyntaxOnly`, so the syntax stays strippable — no `enum`, no `namespace`, no constructor parameter properties.
 
-**`tests/golden/` is the behaviour contract.** Each file pins what the pack produces for one fixture: stdout, stderr, exit code, and the resulting repository state. The suite builds a throwaway project with a real git remote, installs the hooks the way mcs does and executes them through their shebang, and compares. A diff therefore means the pack's behaviour changed, not that a test went stale.
+**`tests/golden/` is the behaviour contract.** Each file pins what the pack produces for one fixture: stdout, stderr, exit code, and the resulting repository state. The suite builds a throwaway project with a real git remote, installs the hooks, runs them through their shebang (pinned by `tests/manifest.test.ts` to the same command the manifest declares), and compares. A diff therefore means the pack's behaviour changed, not that a test went stale.
 
 Fixtures carry an `expect` pattern asserted against the recording, so a fixture where nothing happens fails rather than passing vacuously. Machine- and day-dependent values — temp paths, hostname, dates, git's relative timestamps — are normalised; everything else is byte-exact.
 

@@ -95,7 +95,23 @@ describe("hook install contract", () => {
 		// if `include` reaches these files -- a pattern ending in `.ts` matches no
 		// `.mts`, which left all three plus lib/paths.mts unchecked entirely.
 		const include = JSON.parse(readFileSync(join(REPO, "tsconfig.json"), "utf8")).include as string[];
-		assert.ok(include.includes("runtime/**/*.mts"), "tsconfig include does not reach the .mts entry points");
+		// Resolve the globs instead of pinning one pattern string: rewriting
+		// `include`, or adding a runtime file, then still has to keep the coverage.
+		const reaches = include.map(
+			(p) =>
+				new RegExp(
+					`^${p
+						.split("/")
+						.map((s) => (s === "**" ? "\0" : s.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")))
+						.join("/")
+						.replace(/\0\//g, "(?:[^/]+/)*")}$`,
+				),
+		);
+		const unreachable = readdirSync(join(REPO, "runtime"), { recursive: true, encoding: "utf8" })
+			.filter((f) => f.endsWith(".ts") || f.endsWith(".mts"))
+			.map((f) => `runtime/${f}`)
+			.filter((f) => !reaches.some((re) => re.test(f)));
+		assert.deepEqual(unreachable, [], `tsconfig include does not reach: ${unreachable.join(", ")}`);
 	});
 });
 

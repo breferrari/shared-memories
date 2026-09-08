@@ -1,9 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ALLOWED_PATTERN } from "../runtime/lib/naming.mts";
+import { stripJsonComments } from "./harness.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const manifest = readFileSync(join(REPO, "techpack.yaml"), "utf8");
@@ -94,7 +95,7 @@ describe("hook install contract", () => {
 		// point as CommonJS and died on the first import. `tsc` subsumes it, but only
 		// if `include` reaches these files -- a pattern ending in `.ts` matches no
 		// `.mts`, which left all three plus lib/paths.mts unchecked entirely.
-		const include = JSON.parse(readFileSync(join(REPO, "tsconfig.json"), "utf8")).include as string[];
+		const include = JSON.parse(stripJsonComments(readFileSync(join(REPO, "tsconfig.json"), "utf8"))).include as string[];
 		// Resolve the globs instead of pinning one pattern string: rewriting
 		// `include`, or adding a runtime file, then still has to keep the coverage.
 		const reaches = include.map(
@@ -109,7 +110,8 @@ describe("hook install contract", () => {
 		);
 		const unreachable = readdirSync(join(REPO, "runtime"), { recursive: true, encoding: "utf8" })
 			.filter((f) => f.endsWith(".ts") || f.endsWith(".mts"))
-			.map((f) => `runtime/${f}`)
+			// readdirSync yields the platform separator; the globs are written with "/".
+			.map((f) => `runtime/${f.split(sep).join("/")}`)
 			.filter((f) => !reaches.some((re) => re.test(f)));
 		assert.deepEqual(unreachable, [], `tsconfig include does not reach: ${unreachable.join(", ")}`);
 	});

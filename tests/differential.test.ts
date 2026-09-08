@@ -926,10 +926,15 @@ describe("audited edges — behaviour is pinned", () => {
 });
 
 /**
- * Asserted directly rather than pinned to a golden. Every golden in this
- * directory is a recording of the bash, and the bash is gone, so there is
- * nothing left to record this against -- a hand-written file here would claim
- * to be a recording it is not.
+ * Asserted directly rather than pinned to a golden, and deliberately so.
+ *
+ * Every golden in this directory is a recording of the bash, and the bash is
+ * gone, so a hand-written file here would claim to be a recording it is not.
+ * The more durable reason is what a golden would add over these assertions:
+ * git's own error prose for a broken pushurl, byte for byte. Five goldens
+ * already quote git's English and that is this suite's known fragility --
+ * a translated or reworded git breaks them. Not a property worth extending
+ * to a sixth for a branch whose contract is an exit code.
  */
 describe("push failures are classified by exit code, not message text", () => {
 	test("a broken pushurl reaches the non-rejection branch", () => {

@@ -1,8 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { stripJsonComments } from "./harness.ts";
 import { isJsonStream } from "../runtime/lib/hook-io.mts";
 import { resolveMode } from "../runtime/lib/mode.mts";
 import { ALLOWED_PATTERN, MEMORY_WRITE_PATTERN } from "../runtime/lib/naming.mts";
@@ -137,5 +139,42 @@ describe("the review dedupe state fails open", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("reading tsconfig.json as the JSONC it is by convention", () => {
+	const parse = (t: string): unknown => JSON.parse(stripJsonComments(t));
+
+	test("line and block comments are removed", () => {
+		assert.deepEqual(parse('{\n  // leading\n  "a": 1, /* inline */ "b": 2\n}'), { a: 1, b: 2 });
+	});
+
+	test("a block comment spanning lines is removed", () => {
+		assert.deepEqual(parse('{\n  /*\n   * why this option is set\n   */\n  "a": 1\n}'), { a: 1 });
+	});
+
+	test("comment markers inside a string survive", () => {
+		assert.deepEqual(parse('{"a": "https://x/y", "b": "/* not a comment */"}'), {
+			a: "https://x/y",
+			b: "/* not a comment */",
+		});
+	});
+
+	test("an escaped quote does not end the string early", () => {
+		assert.deepEqual(parse('{"a": "he said \\"hi\\" // still a string"}'), { a: 'he said "hi" // still a string' });
+	});
+
+	test("trailing commas before a closer are dropped", () => {
+		assert.deepEqual(parse('{"a": [1, 2, ], "b": 2, }'), { a: [1, 2], b: 2 });
+	});
+
+	test("a comma inside a string is not mistaken for a trailing one", () => {
+		assert.deepEqual(parse('{"a": "x,", "b": ["y,"]}'), { a: "x,", b: ["y,"] });
+	});
+
+	test("the pack's own tsconfig still parses and declares include", () => {
+		const repo = dirname(dirname(fileURLToPath(import.meta.url)));
+		const cfg = parse(readFileSync(join(repo, "tsconfig.json"), "utf8")) as { include?: string[] };
+		assert.ok(Array.isArray(cfg.include) && cfg.include.length > 0, "tsconfig declares no include");
 	});
 });

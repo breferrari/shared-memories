@@ -114,6 +114,74 @@ const HERMETIC = {
 	GIT_COMMITTER_DATE: FIXTURE_DATE,
 } as const;
 
+/**
+ * `tsconfig.json` is JSONC by convention and `JSON.parse` is not, so reading it
+ * strictly means a comment or a trailing comma turns a coverage gate into a
+ * parse error that names neither. Scans in one pass so that `//`, `/*` and a
+ * trailing `,` inside a string literal are left alone.
+ */
+export function stripJsonComments(text: string): string {
+	const out: string[] = [];
+	let inString = false;
+	let inLine = false;
+	let inBlock = false;
+
+	for (let i = 0; i < text.length; i++) {
+		const c = text[i] as string;
+		const next = text[i + 1];
+
+		if (inLine) {
+			if (c === "\n") {
+				inLine = false;
+				out.push(c);
+			}
+			continue;
+		}
+		if (inBlock) {
+			if (c === "*" && next === "/") {
+				inBlock = false;
+				i++;
+			}
+			continue;
+		}
+		if (inString) {
+			out.push(c);
+			if (c === "\\") {
+				out.push(text[i + 1] ?? "");
+				i++;
+			} else if (c === '"') {
+				inString = false;
+			}
+			continue;
+		}
+		if (c === '"') {
+			inString = true;
+			out.push(c);
+			continue;
+		}
+		if (c === "/" && next === "/") {
+			inLine = true;
+			i++;
+			continue;
+		}
+		if (c === "/" && next === "*") {
+			inBlock = true;
+			i++;
+			continue;
+		}
+		// A structural comma before a closer. Walking back over whitespace can only
+		// reach a comma that is structural: a comma ending a string is followed by
+		// that string's own closing quote, never by `}` or `]`.
+		if (c === "}" || c === "]") {
+			let j = out.length - 1;
+			while (j >= 0 && /\s/.test(out[j] as string)) j--;
+			if (j >= 0 && out[j] === ",") out.splice(j, 1);
+		}
+		out.push(c);
+	}
+	return out.join("");
+}
+
 const entries = (dir: string): string[] => {
 	try {
 		return readdirSync(dir).sort();
